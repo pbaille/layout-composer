@@ -114,8 +114,8 @@
             :flex-flow "row nowrap"
             :justify-content "center"}}
    [:div.parent-props
-    {:style {:padding :15px}}
-    [:h3 {:style {:padding :5px
+    {:style {:padding "0 15px 15px 15px"}}
+    [:h3 {:style {:padding :10px
                   :text-align :center}}
      "parent props"]
     (doall
@@ -127,8 +127,8 @@
         ^{:key k}
         [select-coll @focus k]))]
    [:div.child-props
-    {:style {:padding :15px}}
-    [:h3 {:style {:padding :5px
+    {:style {:padding "0 15px 15px 15px"}}
+    [:h3 {:style {:padding :10px
                   :text-align :center}}
      "child props"]
     (doall
@@ -142,7 +142,7 @@
 
 (defn action [n click-handler]
   [:div {:style {:padding :5px
-                 :margin :4px
+                 :margin "10px 4px"
                  :background :lightgrey
                  :border-radius :4px}
          :on-click click-handler} n])
@@ -304,6 +304,8 @@
 (aset js/document
       "onkeydown"
       (fn [e]
+        (when (and @show-tools (= 27 (.-which e)))
+          (swap! show-tools not))
         (when-not @show-tools
           ;; navigation arrow keys
           (condp = (.-which e)
