@@ -24,6 +24,7 @@
 (def show-tools (atom false))
 (def default-pad "10px")
 (def step 0.1)
+(def border-size 6)
 
 (def flex-parent-opts
   {:flex-direction #{:row :column}
@@ -259,7 +260,14 @@
              [:flex-props :flex-direction]
              #(if (= % "row")
                "column"
-               "row")))]])
+               "row")))]
+
+   [:i.fa.fa-cog
+    {:style {:font-size :22px
+             :color :lightcoral
+             :align-self :center
+             :padding-left :10px}
+     :on-click #(swap! show-tools not)}]])
 
 (defn rect [ref]
   (let [{:keys [flex-props childs]} @ref]
@@ -267,9 +275,11 @@
                               {:display :flex
                                :padding (str default-pad "px")
                                :background-color "rgba(0,0,0,.1)"
-                               :border (if (= (:path @ref) (:path @@focus))
-                                         "3px solid lightcoral"
-                                         "3px solid rgba(0,0,0,.2)")})
+                               :border-width (str border-size "px")
+                               :border-style :solid
+                               :border-color (if (= (:path @ref) (:path @@focus))
+                                         "lightcoral"
+                                         "rgba(0,0,0,.2)")})
                 :on-click (fn [e]
                             (if (= @focus ref)
                               (reset! focus state)
@@ -294,9 +304,6 @@
 (aset js/document
       "onkeydown"
       (fn [e]
-        (if (= 13 (.-which e))
-          ;; toggle tools
-          (swap! show-tools not))
         (when-not @show-tools
           ;; navigation arrow keys
           (condp = (.-which e)
@@ -317,7 +324,8 @@
 
             40 (when (seq (:childs @@focus))
                  (reset! focus
-                         (r/cursor state (lpath (conj (:path @@focus) 0)))))))))
+                         (r/cursor state (lpath (conj (:path @@focus) 0)))))
+            nil))))
 
 (r/render-component [main]
                     (.getElementById js/document "app"))
