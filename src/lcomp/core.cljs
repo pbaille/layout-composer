@@ -22,7 +22,7 @@
    :flex-basis "auto"
    :align-self "auto"})
 
-(def empty-layout {:flex-props default-flex-props :path [] :childs []})
+(def empty-layout {:flex-props {} :path [] :childs []})
 
 (def flex-parent-opts
   {:flex-direction #{:row :column}
@@ -73,7 +73,7 @@
        [:span {:style {:padding "0 10px"}}
         (name k)]
        (into [:select {:style {:width :100px}
-                       :value @c
+                       :value (or @c (get default-flex-props k))
                        :on-change (fn [e] (reset! c (.. e -target -value)))}]
              (doall
                (for [o (get flex-opts k)]
@@ -92,7 +92,7 @@
      [:input {:style {:width :100px}
               :on-change (fn [e] (reset! c (.. e -target -value)))
               :type "number"
-              :value @c}]]))
+              :value (or @c (get default-flex-props k))}]]))
 
 (defn text-input [state k]
   (let [c (r/cursor state [:flex-props k])]
@@ -105,39 +105,40 @@
      [:input {:style {:width :100px}
               :on-change (fn [e] (reset! c (.. e -target -value)))
               :type "text"
-              :value @c}]]))
+              :value (or @c (get default-flex-props k))}]]))
 
-(defn props-panel [focus]
-  [:div.flexprops
-   {:style {:display :flex
-            :flex-flow "row nowrap"
-            :justify-content "center"}}
-   [:div.parent-props
-    {:style {:padding "0 15px 15px 15px"}}
-    [:h3 {:style {:padding :10px
-                  :text-align :center}}
-     "parent props"]
-    (doall
-      (for [k [:flex-direction
-               :flex-wrap
-               :justify-content
-               :align-items
-               :align-content]]
-        ^{:key k}
-        [select-coll focus k]))]
-   [:div.child-props
-    {:style {:padding "0 15px 15px 15px"}}
-    [:h3 {:style {:padding :10px
-                  :text-align :center}}
-     "child props"]
-    (doall
-      (for [k [:order
-               :flex-grow
-               :flex-shrink]]
-        ^{:key k}
-        [num-input focus k]))
-    [select-coll focus :align-self]
-    [text-input focus :flex-basis]]])
+(defn props-panel [open? focus]
+  (when @open?
+    [:div.flexprops
+     {:style {:display :flex
+              :flex-flow "row nowrap"
+              :justify-content "center"}}
+     [:div.parent-props
+      {:style {:padding "0 15px 15px 15px"}}
+      [:h3 {:style {:padding :10px
+                    :text-align :center}}
+       "parent props"]
+      (doall
+        (for [k [:flex-direction
+                 :flex-wrap
+                 :justify-content
+                 :align-items
+                 :align-content]]
+          ^{:key k}
+          [select-coll focus k]))]
+     [:div.child-props
+      {:style {:padding "0 15px 15px 15px"}}
+      [:h3 {:style {:padding :10px
+                    :text-align :center}}
+       "child props"]
+      (doall
+        (for [k [:order
+                 :flex-grow
+                 :flex-shrink]]
+          ^{:key k}
+          [num-input focus k]))
+      [select-coll focus :align-self]
+      [text-input focus :flex-basis]]]))
 
 (defn action [n click-handler]
   [:div {:style {:padding :5px
@@ -149,23 +150,21 @@
 
 (defn re-idx [x]
   (assoc x :childs
-           (mapv
-             (fn [[idx child]]
-               (let [new-path (conj
-                                (vec (butlast (:path child)))
-                                idx)]
-                 (re-idx (assoc
-                           child
-                           :path
-                           new-path))))
-             (partition 2
-                        (interleave (range)
-                                    (mapv (fn [child]
-                                            (assoc child :path (conj (:path x) (last (:path child)))))
-                                          (remove nil? (:childs x))))))))
+           (vec
+             (map-indexed
 
-(defn lpath [p]
-  (interleave (repeat :childs) p))
+               (fn [idx child]
+                 (re-idx
+                   (assoc child :path (conj (vec (butlast (:path child))) idx))))
+
+               (mapv (fn [child]
+                       (assoc child :path (conj (:path x) (last (:path child)))))
+                     (remove nil? (:childs x)))))))
+
+(defn lpath
+  ([p] (interleave (repeat :childs) p))
+  ([layout p]
+   (concat [:layouts layout] (lpath p))))
 
 (defn insert-childs-at-path [this p childs]
   (update-in this
@@ -184,8 +183,13 @@
       :childs
       (mapv #(extend-path % idx) (:childs this)))))
 
-(defn actions [state focus]
-  (println @state @focus)
+(defn update-flex-prop [this k f & args]
+  (update-in this
+             [:flex-props k]
+             (fn [x]
+               (apply f (or x (get default-flex-props k)) args))))
+
+(defn actions [layout focus props-panel?]
   [:div.actions
    {:style {:display :flex
             :flex-flow "row nowrap"
@@ -193,29 +197,25 @@
    [action
     "add child"
     (fn []
-      (println @focus)
       (swap! focus
-             #(update %
-                      :childs
-                      (fn [childs]
-                        (let [cnt (count childs)]
-                          (conj childs {:flex-props default-flex-props
-                                        :childs []
-                                        :path (conj (:path %) cnt)}))))))]
+             (fn [{p :path :as focus}]
+               (update focus
+                       :childs
+                       (fn [childs]
+                         (let [cnt (count childs)]
+                           (conj childs {:flex-props {}
+                                         :childs []
+                                         :path (conj p cnt)})))))))]
    [action
     "kill"
     (fn []
-      (swap! state
-             update
-             :layout
+      (swap! layout
              #(re-idx (assoc-in % (lpath (:path @focus)) nil))))]
    [action
     "spread"
     (fn []
       (let [p (lpath (:path @focus))]
-        (swap! state
-               update
-               :layout
+        (swap! layout
                #(-> %
                     (assoc-in p nil)
                     (insert-childs-at-path p (:childs @focus))
@@ -232,8 +232,8 @@
     "size +"
     (fn []
       (swap! focus
-             update-in
-             [:flex-props :flex-grow]
+             update-flex-prop
+             :flex-grow
              +
              step))]
 
@@ -241,31 +241,31 @@
     "size -"
     (fn []
       (swap! focus
-             update-in
-             [:flex-props :flex-grow]
+             update-flex-prop
+             :flex-grow
              -
              step))]
    [action
     "order +"
     (fn []
       (swap! focus
-             update-in
-             [:flex-props :order]
+             update-flex-prop
+             :order
              inc))]
 
    [action
     "order -"
     (fn []
       (swap! focus
-             update-in
-             [:flex-props :order]
+             update-flex-prop
+             :order
              dec))]
    [action
     "switch dir"
     (fn []
       (swap! focus
-             update-in
-             [:flex-props :flex-direction]
+             update-flex-prop
+             :flex-direction
              #(if (= % "row")
                "column"
                "row")))]
@@ -275,24 +275,26 @@
              :color :lightcoral
              :align-self :center
              :padding-left :10px}
-     :on-click #(swap! state update :props-panel? not)}]])
+     :on-click #(swap! props-panel? not)}]])
 
 (defn rect [{:keys [flex-props path childs] :as this} focus-path]
   (let [focus? (= path @focus-path)]
-    [:div.rect {:style (merge flex-props
-                              {:display :flex
-                               :padding (str default-pad "px")
-                               :background-color "rgba(0,0,0,.1)"
-                               :border-width (str border-size "px")
-                               :border-style :solid
-                               :border-color (if focus?
-                                               "lightcoral"
-                                               "rgba(0,0,0,.2)")})
-                :on-click (fn [e]
-                            (if focus?
-                              (reset! focus-path [])
-                              (reset! focus-path path))
-                            (.stopPropagation e))}
+    [:div {:class (str "rect" path)
+           :style (merge default-flex-props
+                         flex-props
+                         {:display :flex
+                          :padding (str default-pad "px")
+                          :background-color "rgba(0,0,0,.1)"
+                          :border-width (str border-size "px")
+                          :border-style :solid
+                          :border-color (if focus?
+                                          "lightcoral"
+                                          "rgba(0,0,0,.2)")})
+           :on-click (fn [e]
+                       (if focus?
+                         (reset! focus-path [])
+                         (reset! focus-path path))
+                       (.stopPropagation e))}
      (when-let [xs (seq childs)]
        (doall
          (for [[idx cr] (map vector (range) xs)]
@@ -300,7 +302,14 @@
            [rect (get-in this [:childs idx]) focus-path])))]))
 
 (defn focus [state]
-  (r/cursor state (cons :layout (lpath (:focus-path @state)))))
+  (r/cursor state (lpath (:current-layout @state) (:focus-path @state))))
+
+(defn nav-childs [state step]
+  (update state
+          :focus-path
+          #(conj (vec (butlast %))
+                 (mod (+ step (last %))
+                      (count (:childs (get-in state (lpath (:current-layout state) (butlast %)))))))))
 
 (defn register-key-events [state]
   (aset js/document
@@ -313,51 +322,37 @@
             (when-not (:props-panel? @state)
               ;; navigation arrow keys
               (condp = (.-which e)
-                37 (swap! state
-                          update
-                          :focus-path
-                          #(conj (vec (butlast %))
-                                 (mod (dec (last %))
-                                      (count (:childs (get-in @state (cons :layout (lpath (butlast %)))))))))
-                39 (swap! state
-                          update
-                          :focus-path
-                          #(conj (vec (butlast %))
-                                 (mod (inc (last %))
-                                      (count (:childs (get-in @state (cons :layout (lpath (butlast %)))))))))
-                38 (swap! state
-                          update
-                          :focus-path
-                          (comp vec butlast))
-
-                40 (when (seq (:childs focus))
-                     (swap! state
-                            update
-                            :focus-path
-                            conj
-                            0))
+                37 (swap! state nav-childs -1)
+                39 (swap! state nav-childs 1)
+                38 (swap! state update :focus-path (comp vec butlast))
+                40 (when (seq (:childs focus)) (swap! state update :focus-path conj 0))
                 nil))))))
 
-(defn layout-composer [{:keys [layout] :as props}]
-  (let [state (atom {:layout layout
+(defn layout-composer [{:keys [default-layout layouts] :as props}]
+  (let [state (atom {:layouts (merge {:default default-layout}
+                                     layouts)
                      :focus-path []
+                     :current-layout :default
                      :props-panel? false})
-        focus-path (reaction (r/cursor state [:focus-path]))
-        focus (reaction (r/cursor state (cons :layout (lpath (:focus-path @state)))))]
+        focus-path (r/cursor state [:focus-path])
+        layout (reaction (r/cursor state [:layouts (:current-layout @state)]))
+        props-panel? (r/cursor state [:props-panel?])
+        focus (reaction (r/cursor state (lpath (:current-layout @state) (:focus-path @state))))]
     (r/create-class
       {:reagent-render
-       (fn [] [:div
-               (merge {:style {:display :flex
-                               :flex-flow "column nowrap"
-                               :height :100vh
-                               :width :100vw}}
-                      (:wrapper props))
-               [actions state @focus]
-               (when (:props-panel? @state) [props-panel @focus])
-               [rect (:layout @state) @focus-path]])
+       (fn []
+         [:div
+          (merge {:style {:display :flex
+                          :flex-flow "column nowrap"
+                          :height :100vh
+                          :width :100vw}}
+                 (:wrapper props))
+          [actions @layout @focus props-panel?]
+          [props-panel props-panel? @focus]
+          [rect @@layout focus-path]])
        :component-did-mount
        #(register-key-events state)})))
 
-(r/render-component [layout-composer {:layout empty-layout}]
+(r/render-component [layout-composer {:default-layout empty-layout}]
                     (.getElementById js/document "app"))
 
