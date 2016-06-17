@@ -6,6 +6,14 @@
 
 (enable-console-print!)
 
+;; helpers ----------------------------------------------------------
+
+(defn $ [s] (array-seq (js/document.querySelectorAll s)))
+(defn $1 [s] (first ($ s)))
+(defn tval [e] (.. e -target -value))
+
+;; defaults ----------------------------------------------------------
+
 (def default-pad "10px")
 (def step 0.1)
 (def border-size 6)
@@ -23,6 +31,8 @@
    :align-self "auto"})
 
 (def empty-layout {:flex-props {} :path [] :childs []})
+
+;; flex-props specs --------------------------------------------------
 
 (def flex-parent-opts
   {:flex-direction #{:row :column}
@@ -62,6 +72,8 @@
   (merge flex-child-opts
          flex-parent-opts))
 
+;; sub components ------------------------------------------------------
+
 (defn select-coll [state k]
   (let [c (r/cursor state [:flex-props k])]
     (fn []
@@ -74,7 +86,7 @@
         (name k)]
        (into [:select {:style {:width :100px}
                        :value (or @c (get default-flex-props k))
-                       :on-change (fn [e] (reset! c (.. e -target -value)))}]
+                       :on-change (fn [e] (reset! c (tval e)))}]
              (doall
                (for [o (get flex-opts k)]
                  [:option {:value (name o)
@@ -90,7 +102,7 @@
      [:span {:style {:padding "0 10px"}}
       (name k)]
      [:input {:style {:width :100px}
-              :on-change (fn [e] (reset! c (.. e -target -value)))
+              :on-change (fn [e] (reset! c (tval e)))
               :type "number"
               :value (or @c (get default-flex-props k))}]]))
 
@@ -103,9 +115,62 @@
      [:span {:style {:padding "0 10px"}}
       (name k)]
      [:input {:style {:width :100px}
-              :on-change (fn [e] (reset! c (.. e -target -value)))
+              :on-change (fn [e] (reset! c (tval e)))
               :type "text"
               :value (or @c (get default-flex-props k))}]]))
+
+(defn action [n click-handler]
+  [:div {:style {:padding :5px
+                 :margin "10px 4px"
+                 :background :lightgrey
+                 :border-radius :4px}
+         :on-click click-handler}
+   n])
+
+;; impl helpers ------------------------------------------------------
+
+(defn- re-idx [x]
+  (assoc x :childs
+           (vec
+             (map-indexed
+
+               (fn [idx child]
+                 (re-idx
+                   (assoc child :path (conj (vec (butlast (:path child))) idx))))
+
+               (mapv (fn [child]
+                       (assoc child :path (conj (:path x) (last (:path child)))))
+                     (remove nil? (:childs x)))))))
+
+(defn- lpath
+  ([p] (interleave (repeat :childs) p))
+  ([layout p]
+   (concat [:layouts layout] (lpath p))))
+
+(defn- insert-childs-at-path [this p childs]
+  (update-in this
+             (butlast p)
+             (fn [x]
+               (mapcat #(if (vector? %) % [%])
+                       (assoc x (last p) childs)))))
+
+(defn- extend-path [this idx]
+  (let [parent-path (:path this)]
+    (assoc this
+      :path
+      (vec (concat (take idx parent-path)
+                   [0]
+                   (drop idx parent-path)))
+      :childs
+      (mapv #(extend-path % idx) (:childs this)))))
+
+(defn- update-flex-prop [this k f & args]
+  (update-in this
+             [:flex-props k]
+             (fn [x]
+               (apply f (or x (get default-flex-props k)) args))))
+
+;; tools components ---------------------------------------------------
 
 (defn props-panel [open? focus]
   (when @open?
@@ -139,55 +204,6 @@
           [num-input focus k]))
       [select-coll focus :align-self]
       [text-input focus :flex-basis]]]))
-
-(defn action [n click-handler]
-  [:div {:style {:padding :5px
-                 :margin "10px 4px"
-                 :background :lightgrey
-                 :border-radius :4px}
-         :on-click click-handler}
-   n])
-
-(defn re-idx [x]
-  (assoc x :childs
-           (vec
-             (map-indexed
-
-               (fn [idx child]
-                 (re-idx
-                   (assoc child :path (conj (vec (butlast (:path child))) idx))))
-
-               (mapv (fn [child]
-                       (assoc child :path (conj (:path x) (last (:path child)))))
-                     (remove nil? (:childs x)))))))
-
-(defn lpath
-  ([p] (interleave (repeat :childs) p))
-  ([layout p]
-   (concat [:layouts layout] (lpath p))))
-
-(defn insert-childs-at-path [this p childs]
-  (update-in this
-             (butlast p)
-             (fn [x]
-               (mapcat #(if (vector? %) % [%])
-                       (assoc x (last p) childs)))))
-
-(defn extend-path [this idx]
-  (let [parent-path (:path this)]
-    (assoc this
-      :path
-      (vec (concat (take idx parent-path)
-                   [0]
-                   (drop idx parent-path)))
-      :childs
-      (mapv #(extend-path % idx) (:childs this)))))
-
-(defn update-flex-prop [this k f & args]
-  (update-in this
-             [:flex-props k]
-             (fn [x]
-               (apply f (or x (get default-flex-props k)) args))))
 
 (defn actions [layout focus props-panel?]
   [:div.actions
@@ -277,6 +293,8 @@
              :padding-left :10px}
      :on-click #(swap! props-panel? not)}]])
 
+;; layout component ------------------------------------------------------
+
 (defn rect [{:keys [flex-props path childs] :as this} focus-path]
   (let [focus? (= path @focus-path)]
     [:div {:class (str "rect" path)
@@ -301,32 +319,35 @@
            ^{:key (:path cr)}
            [rect (get-in this [:childs idx]) focus-path])))]))
 
-(defn focus [state]
-  (r/cursor state (lpath (:current-layout @state) (:focus-path @state))))
+;; arrow based navigation and key handler ------------------------
 
-(defn nav-childs [state step]
+(defn- nav-childs [state step]
   (update state
           :focus-path
           #(conj (vec (butlast %))
                  (mod (+ step (last %))
                       (count (:childs (get-in state (lpath (:current-layout state) (butlast %)))))))))
 
-(defn register-key-events [state]
+(defn- any-focused-element? []
+  (pos? (count ($ "*:focus"))))
+
+(defn register-key-events [state focus]
   (aset js/document
         "onkeydown"
         (fn [e]
           (when (and (:props-panel? @state)
                      (= 27 (.-which e)))
             (swap! state update :props-panel? not))
-          (let [focus @(focus state)]
-            (when-not (:props-panel? @state)
-              ;; navigation arrow keys
-              (condp = (.-which e)
-                37 (swap! state nav-childs -1)
-                39 (swap! state nav-childs 1)
-                38 (swap! state update :focus-path (comp vec butlast))
-                40 (when (seq (:childs focus)) (swap! state update :focus-path conj 0))
-                nil))))))
+          (when-not (any-focused-element?)
+            ;; navigation arrow keys
+            (condp = (.-which e)
+              37 (swap! state nav-childs -1)
+              39 (swap! state nav-childs 1)
+              38 (swap! state update :focus-path (comp vec butlast))
+              40 (when (seq (:childs focus)) (swap! state update :focus-path conj 0))
+              nil)))))
+
+;; main component -----------------------------------------------
 
 (defn layout-composer [{:keys [default-layout layouts] :as props}]
   (let [state (atom {:layouts (merge {:default default-layout}
@@ -351,8 +372,8 @@
           [props-panel props-panel? @focus]
           [rect @@layout focus-path]])
        :component-did-mount
-       #(register-key-events state)})))
+       #(register-key-events state @focus)})))
 
-(r/render-component [layout-composer {:default-layout empty-layout}]
-                    (.getElementById js/document "app"))
+(r/render [layout-composer {:default-layout empty-layout}]
+          ($1 "#app"))
 
