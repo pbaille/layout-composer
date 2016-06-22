@@ -11,6 +11,7 @@
 (defn $ [s] (array-seq (js/document.querySelectorAll s)))
 (defn $1 [s] (first ($ s)))
 (defn tval [e] (.. e -target -value))
+(defn styles [el] (js/window.getComputedStyle (r/dom-node el)))
 
 ;; defaults ----------------------------------------------------------
 
@@ -129,6 +130,15 @@
 
 ;; impl helpers ------------------------------------------------------
 
+(def empty-rlayout {:xs {:default empty-layout}
+                    :cond []
+                    :current :default})
+
+(defn current-layout [rl]
+  (println "current- layout" rl)
+  (when-not (:current rl) (throw (js/Error.)))
+  ((:current rl) (:xs rl)))
+
 (defn- re-idx [x]
   (assoc x :childs
            (vec
@@ -142,10 +152,14 @@
                        (assoc child :path (conj (:path x) (last (:path child)))))
                      (remove nil? (:childs x)))))))
 
-(defn- lpath
-  ([p] (interleave (repeat :childs) p))
-  ([layout p]
-   (concat [:layouts layout] (lpath p))))
+(defn- lpath [rlayout p]
+  (println "lpath " rlayout p)
+  (when-not (:current rlayout) (throw (js/Error.) "ypo"))
+  (loop [lp [:xs (:current rlayout)] [f & xs] p]
+    (if f
+      (recur (vec (concat lp [:childs f :xs (:current (get-in rlayout lp))]))
+             xs)
+      (do (println lp) lp))))
 
 (defn- insert-childs-at-path [this p childs]
   (update-in this
@@ -206,6 +220,13 @@
       [text-input focus :flex-basis]]]))
 
 (defn actions [layout focus props-panel?]
+
+  (println "actions props ")
+  (println layout)
+  (println focus)
+  (println props-panel?)
+  (println "--------------")
+
   [:div.actions
    {:style {:display :flex
             :flex-flow "row nowrap"
@@ -213,28 +234,32 @@
    [action
     "add child"
     (fn []
+      (println "top" @focus)
       (swap! focus
-             (fn [{p :path :as focus}]
-               (update focus
-                       :childs
-                       (fn [childs]
-                         (let [cnt (count childs)]
-                           (conj childs {:flex-props {}
-                                         :childs []
-                                         :path (conj p cnt)})))))))]
+             (fn [{p :path current :current :as focus}]
+               (let [res (update focus
+                                 :childs
+                                 (fn [childs]
+                                   (let [cnt (count childs)]
+                                     (conj childs (assoc-in empty-rlayout
+                                                            [:xs :default :path]
+                                                            (conj p cnt))))))]
+                 (println "res; " res)
+                 res))))]
    [action
     "kill"
     (fn []
       (swap! layout
-             #(re-idx (assoc-in % (lpath (:path @focus)) nil))))]
+             #(re-idx (assoc-in % (lpath % (:path @focus)) nil))))]
    [action
     "spread"
     (fn []
-      (let [p (lpath (:path @focus))]
+      (let [p (lpath layout (:path @focus))
+            childs (:childs @focus)]
         (swap! layout
                #(-> %
                     (assoc-in p nil)
-                    (insert-childs-at-path p (:childs @focus))
+                    (insert-childs-at-path p childs)
                     re-idx))))]
    [action
     "wrap"
@@ -244,47 +269,13 @@
                {:flex-props default-flex-props
                 :path (:path f)
                 :childs [(extend-path f (count (:path f)))]})))]
-   [action
-    "size +"
-    (fn []
-      (swap! focus
-             update-flex-prop
-             :flex-grow
-             +
-             step))]
 
-   [action
-    "size -"
-    (fn []
-      (swap! focus
-             update-flex-prop
-             :flex-grow
-             -
-             step))]
-   [action
-    "order +"
-    (fn []
-      (swap! focus
-             update-flex-prop
-             :order
-             inc))]
-
-   [action
-    "order -"
-    (fn []
-      (swap! focus
-             update-flex-prop
-             :order
-             dec))]
-   [action
-    "switch dir"
-    (fn []
-      (swap! focus
-             update-flex-prop
-             :flex-direction
-             #(if (= % "row")
-               "column"
-               "row")))]
+   [action "size +" #(swap! focus update-flex-prop :flex-grow + step)]
+   [action "size -" #(swap! focus update-flex-prop :flex-grow - step)]
+   [action "order +" #(swap! focus update-flex-prop :order inc)]
+   [action "order -" #(swap! focus update-flex-prop :order dec)]
+   [action "switch dir" (fn [] (swap! focus update-flex-prop :flex-direction
+                                      #(if (= % "row") "column" "row")))]
 
    [:i.fa.fa-cog
     {:style {:font-size :22px
@@ -295,13 +286,12 @@
 
 ;; layout component ------------------------------------------------------
 
-(defn rect [{:keys [flex-props path childs] :as this} focus-path]
+(defn simple-layout [{:keys [flex-props path childs] :as this} focus-path]
   (let [focus? (= path @focus-path)]
     [:div {:class (str "rect" path)
            :style (merge default-flex-props
                          flex-props
                          {:display :flex
-                          :padding (str default-pad "px")
                           :background-color "rgba(0,0,0,.1)"
                           :border-width (str border-size "px")
                           :border-style :solid
@@ -317,7 +307,51 @@
        (doall
          (for [[idx cr] (map vector (range) xs)]
            ^{:key (:path cr)}
-           [rect (get-in this [:childs idx]) focus-path])))]))
+           [simple-layout (get-in this [:childs idx]) focus-path])))]))
+
+(defn responsive-layout [layout focus-path]
+  (r/create-class
+    {:reagent-render (fn [rlayout focus-path]
+                       (println "render rl: " rlayout)
+                       (let [{:keys [flex-props path childs] :as current} (current-layout @rlayout)
+                             focus? (= path @focus-path)]
+                         [:div {:class (str "rect" path)
+                                :style (merge default-flex-props
+                                              flex-props
+                                              {:display :flex
+                                               :background-color "rgba(0,0,0,.1)"
+                                               :border-width (str border-size "px")
+                                               :border-style :solid
+                                               :border-color (if focus?
+                                                               "lightcoral"
+                                                               "rgba(0,0,0,.2)")})
+                                :on-click (fn [e]
+                                            (if focus?
+                                              (reset! focus-path [])
+                                              (reset! focus-path path))
+                                            (.stopPropagation e))}
+                          (when-let [xs (seq childs)]
+                            (doall
+                              (for [[idx cr] (map vector (range) xs)]
+                                (do (println "cr: " cr)
+                                    ^{:key (:path cr)}
+                                    [responsive-layout
+                                     (r/wrap cr
+                                             swap!
+                                             (fn [s]
+                                               (println "rwrap fn " s)
+                                               (assoc-in s [:xs (:current @rlayout) :childs idx] s)))
+                                     focus-path]))))]))
+     :component-did-update (fn [this]
+                             (let [ss (styles this)
+                                   h (.-height ss)
+                                   w (.-width ss)
+                                   rs (:cond (r/props this))
+                                   props (r/props this)
+                                   [_ current] (first (filter (fn [[pred _]] (pred w h)) rs))
+                                   current (or current :default)]
+                               (if (not= (:current props) current)
+                                 (swap! layout :current current))))}))
 
 ;; arrow based navigation and key handler ------------------------
 
@@ -326,7 +360,7 @@
           :focus-path
           #(conj (vec (butlast %))
                  (mod (+ step (last %))
-                      (count (:childs (get-in state (lpath (:current-layout state) (butlast %)))))))))
+                      (count (:childs (get-in state (lpath (:layout @state) (butlast %)))))))))
 
 (defn- any-focused-element? []
   (pos? (count ($ "*:focus"))))
@@ -344,21 +378,22 @@
               37 (swap! state nav-childs -1)
               39 (swap! state nav-childs 1)
               38 (swap! state update :focus-path (comp vec butlast))
-              40 (when (seq (:childs focus)) (swap! state update :focus-path conj 0))
+              40 (when (seq (:childs @focus)) (swap! state update :focus-path conj 0))
               nil)))))
 
 ;; main component -----------------------------------------------
 
-(defn layout-composer [{:keys [default-layout layouts] :as props}]
-  (let [state (atom {:layouts (merge {:default default-layout}
-                                     layouts)
+
+
+(defn layout-composer [{:keys [layout] :as props}]
+  (let [state (atom {:layout (or layout empty-rlayout)
                      :focus-path []
-                     :current-layout :default
                      :props-panel? false})
         focus-path (r/cursor state [:focus-path])
-        layout (reaction (r/cursor state [:layouts (:current-layout @state)]))
+        rlayout (reaction (r/cursor state [:layout]))
+        current (reaction (r/cursor state [:layout :xs (:current (:layout @state))]))
         props-panel? (r/cursor state [:props-panel?])
-        focus (reaction (r/cursor state (lpath (:current-layout @state) (:focus-path @state))))]
+        focus (reaction (r/cursor state (apply vector :layout (lpath (:layout @state) (:focus-path @state)))))]
     (r/create-class
       {:reagent-render
        (fn []
@@ -368,12 +403,12 @@
                           :height :100vh
                           :width :100vw}}
                  (:wrapper props))
-          [actions @layout @focus props-panel?]
+          [actions @current @focus props-panel?]
           [props-panel props-panel? @focus]
-          [rect @@layout focus-path]])
+          [responsive-layout @rlayout focus-path]])
        :component-did-mount
        #(register-key-events state @focus)})))
 
-(r/render [layout-composer {:default-layout empty-layout}]
+(r/render [layout-composer]
           ($1 "#app"))
 
