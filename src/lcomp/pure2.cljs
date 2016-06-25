@@ -26,6 +26,16 @@
 
 (def butlastv (comp vec butlast))
 
+(defn vinsert [v idx & vls]
+  (vec (concat (subvec v 0 idx) vls (subvec v idx))))
+
+(comment
+  (vinsert [1 2] 1 8)
+  (vinsert [1 2] 1 8 9 0))
+
+(defn- rem-idx [v idx]
+  (vec (concat (subvec v 0 idx) (subvec v (inc idx)))))
+
 ;; empty layouts ---------------------------------------
 
 (def empty-layout
@@ -65,16 +75,6 @@
   (lpath [])
   (lpath [1 2]))
 
-(defn vinsert [v idx & vls]
-  (vec (concat (subvec v 0 idx) vls (subvec v idx))))
-
-(comment
-  (vinsert [1 2] 1 8)
-  (vinsert [1 2] 1 8 9 0))
-
-(defn- rem-idx [v idx]
-  (vec (concat (subvec v 0 idx) (subvec v (inc idx)))))
-
 (defn re-idx-childs
   ([l]
    (update l
@@ -101,16 +101,18 @@
                  (assoc child :path (conj path idx)))
       path)))
 
-(insert-child (insert-child (layout) {:idx 0})
-              {:child (clayout) :idx 0})
+(comment
+  (insert-child (insert-child (layout) {:idx 0})
+                {:child (clayout) :idx 0}))
 
 (defn kill [l p]
   (re-idx-childs
     (update-in l (lpath p) (constantly nil))
     (butlastv p)))
 
-(kill (insert-child (layout) {:idx 0})
-      [0])
+(comment
+  (kill (insert-child (layout) {:idx 0})
+        [0]))
 
 (defn spread [l p]
   (let [childs (get-in l (conj (lpath p) :childs))]
