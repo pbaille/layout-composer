@@ -9,6 +9,11 @@
 (defn $1 [s] (first ($ s)))
 (defn tval [e] (.. e -target -value))
 (defn styles [el] (js/window.getComputedStyle (r/dom-node el)))
+(defn dimensions-map [el]
+  (let [styles (styles el)
+        parse-px-str #(int (re-find #"[\d]*" %))]
+    {:w (parse-px-str (.-width styles))
+     :h (parse-px-str (.-height styles))}))
 
 ;; defaults ----------------------------------------------------------
 
@@ -114,11 +119,17 @@
               :type "text"
               :value (or @c (get default-flex-props k))}]]))
 
+(def button-styles
+  {:padding :5px
+   :margin "10px 4px"
+   :background :lightgrey
+   :border-radius :4px})
+
+(defn button [props txt]
+  [:span (update props :style merge button-styles) txt])
+
 (defn action [n click-handler]
-  [:div {:style {:padding :5px
-                 :margin "10px 4px"
-                 :background :lightgrey
-                 :border-radius :4px}
+  [:div {:style button-styles
          :on-click click-handler}
    n])
 
@@ -131,10 +142,11 @@
 ;; tools components ---------------------------------------------------
 
 (defn props-panel [open? focus]
+  (println "rerender props panel")
   (when @open?
     [:div.flexprops
      {:style {:display :flex
-              :flex-flow "row nowrap"
+              :flex-flow "row wrap"
               :justify-content "center"}}
      [:div.parent-props
       {:style {:padding "0 15px 15px 15px"}}
@@ -161,7 +173,26 @@
           ^{:key k}
           [num-input focus k]))
       [select-coll focus :align-self]
-      [text-input focus :flex-basis]]]))
+      [text-input focus :flex-basis]]
+     [:div.responses
+      {:style {:flex-basis :100%
+               :display :flex
+               :flex-flow "row nowrap"
+               :justify-content :center}}
+      [:span {:style (merge button-styles
+                            (if (or (not (:current @focus)) (= :default (:current @focus)))
+                              {:background "lightcoral"
+                               :color "white"}))}
+       "default"]
+      (let [rs (:responses @focus)]
+        (doall (for [r rs]
+                 [:span {:style (merge button-styles
+                                       (if (= (:id r) (:current @focus))
+                                         {:background "lightskyblue"
+                                          :color "white"}))
+                         :key (gensym)}
+                  (name (:id r))])))
+      [button {:on-click } "+"]]]))
 
 (defn actions [layout focus focus-path props-panel?]
 
@@ -189,28 +220,47 @@
 
 ;; layout component ------------------------------------------------------
 
-(defn simple-layout [{:keys [flex-props path childs] :as this} focus-path]
-  (let [focus? (= path @focus-path)]
-    [:div {:class (str "rect" path)
-           :style (merge default-flex-props
-                         flex-props
-                         {:display :flex
-                          :background-color "rgba(0,0,0,.1)"
-                          :border-width (str border-size "px")
-                          :border-style :solid
-                          :border-color (if focus?
-                                          "lightcoral"
-                                          "rgba(0,0,0,.2)")})
-           :on-click (fn [e]
-                       (if focus?
-                         (reset! focus-path [])
-                         (reset! focus-path path))
-                       (.stopPropagation e))}
-     (when-let [xs (seq childs)]
-       (doall
-         (for [[idx cr] (map vector (range) xs)]
-           ^{:key (:path cr)}
-           [simple-layout (get-in this [:childs idx]) focus-path])))]))
+(defn simple-layout []
+  (letfn [(upd [this]
+            (aset js/window
+                  "onresize"
+                  (fn [_] (respond this)))
+
+            (let [layout (:layout (r/props this))
+                  response (lp/respond @layout (dimensions-map this))
+                  fp (:focus-path (r/props this))
+                  fp? (get-in @layout (lp/lpath @fp))]
+              (when-not (= @layout response)
+                (when-not fp? (reset! fp []))
+                (reset! layout response))))]
+    (r/create-class
+      {:reagent-render
+       (fn [{:keys [layout focus-path]}]
+         (let [{:keys [flex-props path childs] :as this} @layout
+               focus? (= path @focus-path)]
+           [:div {:class (apply str "rect" (interpose "." path))
+                  :style (merge default-flex-props
+                                flex-props
+                                {:display :flex
+                                 :background-color "rgba(0,0,0,.1)"
+                                 :border-width (str border-size "px")
+                                 :border-style :solid
+                                 :border-color (if focus?
+                                                 "lightcoral"
+                                                 "rgba(0,0,0,.2)")})
+                  :on-click (fn [e]
+                              (if focus?
+                                (reset! focus-path [])
+                                (reset! focus-path path))
+                              (.stopPropagation e))}
+            (when-let [xs (seq childs)]
+              (doall
+                (for [[idx cr] (map vector (range) xs)]
+                  ^{:key (gensym)}
+                  [simple-layout {:layout (r/cursor layout [:childs idx])
+                                  :focus-path focus-path}])))]))
+       :component-did-update upd
+       :component-did-mount upd})))
 
 ;; arrow based navigation and key handler ------------------------
 
@@ -262,9 +312,16 @@
                  (:wrapper props))
           [actions @layout @focus @focus-path props-panel?]
           [props-panel props-panel? @focus]
-          [simple-layout @@layout focus-path]])
+          [simple-layout {:layout @layout
+                          :focus-path focus-path}]])
        :component-did-mount
        #(register-key-events state)})))
 
-(r/render [layout-composer]
+(r/render [layout-composer {:layout (lp/clayout {:responses [{:id :res2
+                                                              :pred (fn [{:keys [w h]}] (> w 800))
+                                                              :layout (lp/layout)}
+                                                             {:id :res1
+                                                              :pred (fn [{:keys [w h]}] (> w 500))
+                                                              :layout (lp/layout)}
+                                                             ]})}]
           ($1 "#app"))

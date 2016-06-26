@@ -50,7 +50,9 @@
 
 (def empty-clayout
   (t :clayout
-     (assoc empty-layout :responses [])))
+     (assoc empty-layout
+       :current :default
+       :responses [])))
 
 (defn clayout [& [opts]]
   (t :clayout
@@ -59,12 +61,31 @@
 (comment
   (t= :clayout (clayout)))
 
-(defn l> [l args-map]
-  (if (t= :layout l)
-    l
-    (let [rs (:responses l)
-          [_ res] (first (filter #(% args-map) rs))]
-      (assoc res :responses rs))))
+(defn respond [l args-map]
+  (if-let [rs (:responses l)]
+    (let [{:keys [id layout] :as fres} (first (filter #((:pred %) args-map) rs))]
+      (if (and fres (not= id (:current l)))
+        (let [rs-updated (mapv #(if (= (:current l) (:id %))
+                                 (assoc %
+                                   :layout
+                                   (dissoc l :responses :current))
+                                 %)
+                               rs)]
+          (assoc layout
+            :responses rs-updated
+            :current id))
+        l))
+    l))
+
+(comment
+  (respond
+    (clayout {:responses [{:id :res1
+                           :pred (fn [{:keys [w h]}] (> w 300))
+                           :layout (layout)}
+                          {:id :res2
+                           :pred (fn [{:keys [w h]}] (> w 500))
+                           :layout (layout)}]})
+    {:w 100}))
 
 (defn lpath [p]
   (if-not (seq p)
