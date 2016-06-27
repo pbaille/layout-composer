@@ -192,7 +192,8 @@
                                           :color "white"}))
                          :key (gensym)}
                   (name (:id r))])))
-      [button {:on-click } "+"]]]))
+      ;; TODO
+      [button {:on-click identity} "+"]]]))
 
 (defn actions [layout focus focus-path props-panel?]
 
@@ -221,18 +222,20 @@
 ;; layout component ------------------------------------------------------
 
 (defn simple-layout []
-  (letfn [(upd [this]
-            (aset js/window
-                  "onresize"
-                  (fn [_] (respond this)))
-
+  (letfn [(respond [this]
             (let [layout (:layout (r/props this))
                   response (lp/respond @layout (dimensions-map this))
                   fp (:focus-path (r/props this))
                   fp? (get-in @layout (lp/lpath @fp))]
               (when-not (= @layout response)
                 (when-not fp? (reset! fp []))
-                (reset! layout response))))]
+                (reset! layout response))))
+          (upd [this]
+            (aset js/window
+                  "onresize"
+                  (fn [_] (respond this)))
+
+            (respond this))]
     (r/create-class
       {:reagent-render
        (fn [{:keys [layout focus-path]}]
