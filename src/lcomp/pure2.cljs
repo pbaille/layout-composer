@@ -61,9 +61,33 @@
 (comment
   (t= :clayout (clayout)))
 
+(def constraint-type->fn
+  (atom
+    {:min-height (fn [x {h :h}] (<= x h))
+     :min-width (fn [x {w :w}] (<= x w))
+     :max-height (fn [x {h :h}] (>= x h))
+     :max-width (fn [x {w :w}] (>= x w))}))
+
+(defn constraint-vec->fn [[k v]]
+  (println k v)
+  (if (and k v)
+    (partial (@constraint-type->fn k) v)
+    identity))
+
+(defn compile-constraints [cs]
+  (fn [xs]
+    (every? #(% xs)
+            (map (fn [c]
+                   (cond
+                     (vector? c) (constraint-vec->fn c)
+                     (fn? c) c
+                     (nil? c) identity
+                     :else (throw (js/Error. "can't parse constraint " c))))
+                 cs))))
+
 (defn respond [l args-map]
   (if-let [rs (:responses l)]
-    (let [{:keys [id layout] :as fres} (first (filter #((:pred %) args-map) rs))]
+    (let [{:keys [id layout] :as fres} (first (filter #((compile-constraints (:constraints %)) args-map) rs))]
       (if (and fres (not= id (:current l)))
         (let [rs-updated (mapv #(if (= (:current l) (:id %))
                                  (assoc %

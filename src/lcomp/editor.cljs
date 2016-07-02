@@ -141,8 +141,114 @@
 
 ;; tools components ---------------------------------------------------
 
+(defn constraint-editor [state]
+  [:div.media-query
+   {:style {:display :flex
+            :flex-fow "row nowrap"}}
+   (into [:select {:style {:width :100px}
+                   :value (or (first @state) "type")
+                   :on-change (fn [e] (swap! state assoc 0 (keyword (tval e))))}]
+         (doall
+           (for [o (keys @lp/constraint-type->fn)]
+             [:option {:value (name o)
+                       :key o}
+              (name o)])))
+   [:input {:style {:width :100px}
+            :type :number
+            :placeholder "value"
+            :value (second @state)
+            :on-change (fn [e] (swap! state assoc 1 (int (tval e))))}]
+   [:button {:on-click #(reset! state nil)} "-"]])
+
+(defn constraints-editor [xs]
+  [:div.constraints-editor
+   (doall
+     (for [[idx] (map vector (range) (remove nil? @xs))]
+       ^{:key (str "constraint_" idx)}
+       [constraint-editor (r/cursor xs [idx])]))
+   [:button {:on-click (fn [] (swap! xs conj [nil nil]))} "+"]])
+
+(defn response [& [spec]]
+  (merge
+    {:id (gensym "res")
+     :constraints []
+     :layout (lp/layout)}
+    spec))
+
+(defn response-span [{:keys [state edited current idx]}]
+  (let [edited? (= @edited idx)]
+    [:span {:style (merge button-styles
+                          (when (= (:id state) current)
+                            {:background "lightskyblue"
+                             :color "white"})
+                          (when edited?
+                            {:background "purple"}))
+            :key (gensym)
+            :on-click (fn []
+                        (swap! edited
+                               (fn [eidx]
+                                 (when-not (= eidx idx) idx))))}
+     (name (:id state))]))
+
+(defn idx-shift [v idx dir]
+  (let [cnt (count v)]
+    (condp = dir
+      :left (if (zero? idx) v (assoc v (dec idx) (get v idx) idx (get v (dec idx))))
+      :right (if (= (dec cnt) idx) v (assoc v (inc idx) (get v idx) idx (get v (inc idx)))))))
+
+(defn first-idx [pred coll]
+  (ffirst (filter (comp pred second) (map vector (range) coll))))
+
+(defn move-response-buttons [{:keys [responses idx edited]}]
+  [:div.response-idx-editor
+   (for [dir [:left :right]]
+     [:button {:key dir
+               :on-click
+               (fn []
+                 (let [edited-id (:id (get @responses @edited))]
+                   (swap! responses idx-shift idx dir)
+                   (reset! edited
+                           (first-idx #(= edited-id (:id %)) @responses))))}
+      (condp = dir
+              :left "<"
+              :right ">")])])
+
+(defn response-editor [{:keys [responses idx] :as props}]
+  (let [response (r/cursor responses [idx])]
+    [:div.response-editor
+     [move-response-buttons props]
+     [:input {:type :text
+              :value (name (:id @response))
+              :on-change #(swap! response assoc :id (tval %))}]
+     [constraints-editor (r/cursor response [:constraints])]]))
+
+(defn responses [{:keys [xs current]}]
+  (let [edited (r/atom nil)]
+    (fn [{:keys [xs current]}]
+      [:div.responses
+       {:style {:display :flex
+                :flex-basis :100%
+                :flex-flow "row wrap"
+                :justify-content "center"}}
+       [:div.responses-index
+        {:style {:flex-basis :100%
+                 :display :flex
+                 :flex-flow "row nowrap"
+                 :justify-content :center}}
+        [:span {:style (merge button-styles
+                              (if (or (not current) (= :default current))
+                                {:background "lightcoral"
+                                 :color "white"}))}
+         "default"]
+        (doall (for [[idx r] (map vector (range) @xs)]
+                 [response-span {:state r :edited edited :current current :idx idx}]))
+        [button {:on-click #(swap! xs conj (response))} "+"]]
+       (when-let [idx @edited]
+         [response-editor {:responses xs
+                           :idx idx
+                           :edited edited}])])))
+
 (defn props-panel [open? focus]
-  (println "rerender props panel")
   (when @open?
     [:div.flexprops
      {:style {:display :flex
@@ -174,26 +280,8 @@
           [num-input focus k]))
       [select-coll focus :align-self]
       [text-input focus :flex-basis]]
-     [:div.responses
-      {:style {:flex-basis :100%
-               :display :flex
-               :flex-flow "row nowrap"
-               :justify-content :center}}
-      [:span {:style (merge button-styles
-                            (if (or (not (:current @focus)) (= :default (:current @focus)))
-                              {:background "lightcoral"
-                               :color "white"}))}
-       "default"]
-      (let [rs (:responses @focus)]
-        (doall (for [r rs]
-                 [:span {:style (merge button-styles
-                                       (if (= (:id r) (:current @focus))
-                                         {:background "lightskyblue"
-                                          :color "white"}))
-                         :key (gensym)}
-                  (name (:id r))])))
-      ;; TODO
-      [button {:on-click identity} "+"]]]))
+     [responses {:xs (r/cursor focus [:responses])
+                 :current (:current @focus)}]]))
 
 (defn actions [layout focus focus-path props-panel?]
 
@@ -321,10 +409,10 @@
        #(register-key-events state)})))
 
 (r/render [layout-composer {:layout (lp/clayout {:responses [{:id :res2
-                                                              :pred (fn [{:keys [w h]}] (> w 800))
+                                                              :constraints [[:min-width 800]]
                                                               :layout (lp/layout)}
                                                              {:id :res1
-                                                              :pred (fn [{:keys [w h]}] (> w 500))
+                                                              :constraints [[:min-width 500]]
                                                               :layout (lp/layout)}
                                                              ]})}]
           ($1 "#app"))
