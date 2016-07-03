@@ -1,7 +1,8 @@
 (ns lcomp.editor
   (:require-macros [reagent.ratom :refer [reaction]])
   (:require [reagent.core :as r :refer [atom]]
-            [lcomp.pure2 :as lp]))
+            [lcomp.pure2 :as lp]
+            [lcomp.css-props :refer [css-props]]))
 
 (enable-console-print!)
 
@@ -9,11 +10,21 @@
 (defn $1 [s] (first ($ s)))
 (defn tval [e] (.. e -target -value))
 (defn styles [el] (js/window.getComputedStyle (r/dom-node el)))
+
 (defn dimensions-map [el]
   (let [styles (styles el)
         parse-px-str #(int (re-find #"[\d]*" %))]
     {:w (parse-px-str (.-width styles))
      :h (parse-px-str (.-height styles))}))
+
+(defn idx-shift [v idx dir]
+  (let [cnt (count v)]
+    (condp = dir
+      :left (if (zero? idx) v (assoc v (dec idx) (get v idx) idx (get v (dec idx))))
+      :right (if (= (dec cnt) idx) v (assoc v (inc idx) (get v idx) idx (get v (inc idx)))))))
+
+(defn first-idx [pred coll]
+  (ffirst (filter (comp pred second) (map vector (range) coll))))
 
 ;; defaults ----------------------------------------------------------
 
@@ -74,47 +85,65 @@
 
 ;; sub components ------------------------------------------------------
 
+(defn kws->options [kws]
+  (map #(hash-map :name (name (or % "")) :value %) kws))
+
+(defn labeled-dropdown [{:keys [cursor on-change options placeholder label]}]
+  (let [uid (gensym)]
+    (r/create-class
+      {:reagent-render
+       (fn [{:keys [props cursor options placeholder label]}]
+         [:div.ui.action
+          [:div.ui.left.attached.button.blue {:style {:width :130px}} label]
+          [:div.ui.right.attached.dropdown.button
+           (merge {:id uid} props)
+           [:span.text (or (and @cursor (name @cursor)) placeholder "type")]
+           [:div.menu
+            (doall
+              (for [{:keys [value name] :as o} options]
+                [:div.item
+                 {:key [value name]
+                  :data-value value}
+                 name]))]]])
+       :component-did-mount
+       (fn [this]
+         (let [on-change (:on-change (r/props this) reset!)]
+           (.dropdown (js/$ (str "#" uid))
+                      (clj->js {:onChange #(on-change cursor %)}))))})))
+
 (defn select-coll [state k]
   (let [c (r/cursor state [:flex-props k])]
     (fn []
-      [:div
-       {:style {:display :flex
-                :flex-flow "row nowrap"
-                :justify-content "space-between"
-                :padding :3px}}
-       [:span {:style {:padding "0 10px"}}
-        (name k)]
-       (into [:select {:style {:width :100px}
-                       :value (or @c (get default-flex-props k))
-                       :on-change (fn [e] (reset! c (tval e)))}]
-             (doall
-               (for [o (get flex-opts k)]
-                 [:option {:value (name o)
-                           :key o}
-                  (name o)])))])))
+      [labeled-dropdown
+       {:label (name k)
+        :cursor c
+        :props {:style {:width :120px}}
+        :options (kws->options (get flex-opts k))
+        :placeholder (name (get default-flex-props k))}])))
+
+(def input-button-styles
+  {:width :120px
+   :border :none
+   :background :#e0e1e2
+   :box-shadow "0 0 0 1px rgba(34,36,38,.15)"})
 
 (defn num-input [state k]
   (let [c (r/cursor state [:flex-props k])]
-    [:div {:style {:display :flex
-                   :flex-flow "row nowrap"
-                   :justify-content "space-between"
-                   :padding :3px}}
-     [:span {:style {:padding "0 10px"}}
-      (name k)]
-     [:input {:style {:width :100px}
-              :on-change (fn [e] (reset! c (tval e)))
-              :type "number"
-              :value (or @c (get default-flex-props k))}]]))
+    [:div
+     [:div.ui.labeled.input
+      [:div.ui.left.attached.button.blue {:style {:width :130px}}
+       (name k)]
+      [:input.ui {:style input-button-styles
+                  :on-change (fn [e] (reset! c (tval e)))
+                  :type "number"
+                  :value (or @c (get default-flex-props k))}]]]))
 
 (defn text-input [state k]
   (let [c (r/cursor state [:flex-props k])]
-    [:div {:style {:display :flex
-                   :flex-flow "row nowrap"
-                   :justify-content "space-between"
-                   :padding :3px}}
-     [:span {:style {:padding "0 10px"}}
+    [:div.ui.labeled.input
+     [:div.ui.left.attached.button.blue {:style {:width :130px}}
       (name k)]
-     [:input {:style {:width :100px}
+     [:input {:style input-button-styles
               :on-change (fn [e] (reset! c (tval e)))
               :type "text"
               :value (or @c (get default-flex-props k))}]]))
@@ -128,37 +157,26 @@
 (defn button [props txt]
   [:span (update props :style merge button-styles) txt])
 
-(defn action [n click-handler]
-  [:div {:style button-styles
-         :on-click click-handler}
-   n])
-
 (defn- update-flex-prop [this k f & args]
   (update-in this
              [:flex-props k]
              (fn [x]
                (apply f (or x (get default-flex-props k)) args))))
 
-;; tools components ---------------------------------------------------
+
+
+;; constraints ---------------------------------------------------
 
 (defn constraint-editor [state]
-  [:div.media-query
-   {:style {:display :flex
-            :flex-fow "row nowrap"}}
-   (into [:select {:style {:width :100px}
-                   :value (or (first @state) "type")
-                   :on-change (fn [e] (swap! state assoc 0 (keyword (tval e))))}]
-         (doall
-           (for [o (keys @lp/constraint-type->fn)]
-             [:option {:value (name o)
-                       :key o}
-              (name o)])))
-   [:input {:style {:width :100px}
-            :type :number
-            :placeholder "value"
-            :value (second @state)
-            :on-change (fn [e] (swap! state assoc 1 (int (tval e))))}]
-   [:button {:on-click #(reset! state nil)} "-"]])
+  [:div.media-query.ui.input.labeled
+   [labeled-dropdown {:cursor (r/cursor state [0])
+                      :options (kws->options (keys @lp/constraint-type->fn))}]
+   [:input
+    {:type :number
+     :placeholder "value"
+     :value (second @state)
+     :on-change (fn [e] (swap! state assoc 1 (int (tval e))))}]
+   [:div.ui.button {:on-click #(reset! state nil)} "-"]])
 
 (defn constraints-editor [xs]
   [:div.constraints-editor
@@ -166,7 +184,9 @@
      (for [[idx] (map vector (range) (remove nil? @xs))]
        ^{:key (str "constraint_" idx)}
        [constraint-editor (r/cursor xs [idx])]))
-   [:button {:on-click (fn [] (swap! xs conj [nil nil]))} "+"]])
+   [:div.ui.button {:on-click (fn [] (swap! xs conj [nil nil]))} "+"]])
+
+;; responses -----------------------------------------------------
 
 (defn response [& [spec]]
   (merge
@@ -177,76 +197,97 @@
 
 (defn response-span [{:keys [state edited current idx]}]
   (let [edited? (= @edited idx)]
-    [:span {:style (merge button-styles
-                          (when (= (:id state) current)
-                            {:background "lightskyblue"
-                             :color "white"})
-                          (when edited?
-                            {:background "purple"}))
-            :key (gensym)
-            :on-click (fn []
-                        (swap! edited
-                               (fn [eidx]
-                                 (when-not (= eidx idx) idx))))}
+    [:div.ui.button
+     {:class
+      (str
+        (when (and (not edited?) (= (:id state) current)) "red")
+        (when edited? "purple"))
+      :key (gensym)
+      :on-click (fn []
+                  (swap! edited
+                         (fn [eidx]
+                           (when-not (= eidx idx) idx))))}
      (name (:id state))]))
 
-(defn idx-shift [v idx dir]
-  (let [cnt (count v)]
-    (condp = dir
-      :left (if (zero? idx) v (assoc v (dec idx) (get v idx) idx (get v (dec idx))))
-      :right (if (= (dec cnt) idx) v (assoc v (inc idx) (get v idx) idx (get v (inc idx)))))))
-
-(defn first-idx [pred coll]
-  (ffirst (filter (comp pred second) (map vector (range) coll))))
-
 (defn move-response-buttons [{:keys [responses idx edited]}]
-  [:div.response-idx-editor
-   (for [dir [:left :right]]
-     [:button {:key dir
-               :on-click
-               (fn []
-                 (let [edited-id (:id (get @responses @edited))]
-                   (swap! responses idx-shift idx dir)
-                   (reset! edited
-                           (first-idx #(= edited-id (:id %)) @responses))))}
-      (condp = dir
-              :left "<"
-              :right ">")])])
+  [:div.response-idx-editor.ui.buttons
+   [:button.ui.button
+    {:key :left
+     :on-click
+     (fn []
+       (let [edited-id (:id (get @responses @edited))]
+         (swap! responses idx-shift idx :left)
+         (reset! edited
+                 (first-idx #(= edited-id (:id %)) @responses))))}
+    "<"]
+   [:button.ui.button.icon [:i.icon.ban]]
+   [:button.ui.button
+    {:key :right
+     :on-click
+     (fn []
+       (let [edited-id (:id (get @responses @edited))]
+         (swap! responses idx-shift idx :right)
+         (reset! edited
+                 (first-idx #(= edited-id (:id %)) @responses))))}
+    ">"]])
 
 (defn response-editor [{:keys [responses idx] :as props}]
   (let [response (r/cursor responses [idx])]
     [:div.response-editor
      [move-response-buttons props]
-     [:input {:type :text
-              :value (name (:id @response))
-              :on-change #(swap! response assoc :id (tval %))}]
+     [:div.input.ui.labeled
+      [:div.ui.label "Name: "]
+      [:input
+       {:type :text
+        :value (name (:id @response))
+        :on-change #(swap! response assoc :id (tval %))}]]
      [constraints-editor (r/cursor response [:constraints])]]))
 
 (defn responses [{:keys [xs current]}]
   (let [edited (r/atom nil)]
     (fn [{:keys [xs current]}]
       [:div.responses
-       {:style {:display :flex
-                :flex-basis :100%
-                :flex-flow "row wrap"
-                :justify-content "center"}}
-       [:div.responses-index
-        {:style {:flex-basis :100%
-                 :display :flex
-                 :flex-flow "row nowrap"
-                 :justify-content :center}}
-        [:span {:style (merge button-styles
-                              (if (or (not current) (= :default current))
-                                {:background "lightcoral"
-                                 :color "white"}))}
+       {:style {:width :100%}}
+       [:div.responses-index.ui.buttons.fluid
+        {:style {:width :400px
+                 :margin :auto}}
+        [:div.ui.button
+         {:class (when (or (not current) (= :default current)) "red")}
          "default"]
         (doall (for [[idx r] (map vector (range) @xs)]
                  [response-span {:state r :edited edited :current current :idx idx}]))
-        [button {:on-click #(swap! xs conj (response))} "+"]]
+        [:div.ui.button {:on-click #(swap! xs conj (response))} "+"]]
        (when-let [idx @edited]
          [response-editor {:responses xs
                            :idx idx
                            :edited edited}])])))
+
+;; css props ---------------------------------------------------------------
+
+(defn css-prop [state]
+  (let [uid (gensym)
+        type (reaction (when-let [t (first @state)] (name t)))
+        value (reaction (second @state))]
+    (r/create-class
+      {:reagent-render
+       (fn [] [:div.css-prop.ui.input.labeled
+               {:style {:width :100%}}
+               [:div.css-prop-type.label.ui.dropdown.search.icon.button
+                {:id uid}
+                [:span.text (or @type "type")]
+                [:div.menu
+                 (doall
+                   (for [prop css-props]
+                     [:div.item
+                      {:key prop
+                       :data-value prop}
+                      (name prop)]))]]
+               [:input {:type "text" :placeholder "value" :value @value :on-change #(swap! state assoc 1 (tval %))}]])
+       :component-did-mount
+       (fn [] (.dropdown (js/$ (str "#" uid))
+                         (clj->js {:onChange (fn [v] (println v) (swap! state assoc 0 (keyword v)))})))})))
+
+;; props panel -------------------------------------------------------------
 
 (defn props-panel [open? focus]
   (when @open?
@@ -280,8 +321,24 @@
           [num-input focus k]))
       [select-coll focus :align-self]
       [text-input focus :flex-basis]]
+     [:div.css-props
+      {:style {:padding "0 15px 15px 15px"}}
+      [:h3 {:style {:padding :10px
+                    :text-align :center}}
+       "css props"]
+      (doall
+        (for [[idx k] (map vector (range) (:css-props @focus))]
+          ^{:key k}
+          [css-prop (r/cursor focus [:css-props idx])]))]
      [responses {:xs (r/cursor focus [:responses])
                  :current (:current @focus)}]]))
+
+;; actions ---------------------------------------------------------------
+
+(defn action [n click-handler]
+  [:div.ui.button.purple
+   {:on-click click-handler}
+   n])
 
 (defn actions [layout focus focus-path props-panel?]
 
@@ -289,16 +346,20 @@
    {:style {:display :flex
             :flex-flow "row nowrap"
             :justify-content :center}}
-   [action "add child" #(swap! layout lp/insert-child {:path focus-path})]
-   [action "kill" #(swap! layout lp/kill {:path focus-path})]
-   [action "spread" #(swap! layout lp/spread {:path focus-path})]
-   [action "wrap" #(swap! layout lp/wrap {:path focus-path})]
-   [action "size +" #(swap! focus update-flex-prop :flex-grow + step)]
-   [action "size -" #(swap! focus update-flex-prop :flex-grow - step)]
-   [action "order +" #(swap! focus update-flex-prop :order inc)]
-   [action "order -" #(swap! focus update-flex-prop :order dec)]
-   [action "switch dir" (fn [] (swap! focus update-flex-prop :flex-direction
-                                      #(if (= % "row") "column" "row")))]
+   [:div.ui.buttons
+    {:style {:padding "5px"}}
+    [action "add child" #(swap! layout lp/insert-child {:path focus-path})]
+    [action "kill" #(swap! layout lp/kill {:path focus-path})]
+    [action "spread" #(swap! layout lp/spread {:path focus-path})]
+    [action "wrap" #(swap! layout lp/wrap {:path focus-path})]]
+   [:div.ui.buttons
+    {:style {:padding "5px"}}
+    [action "size +" #(swap! focus update-flex-prop :flex-grow + step)]
+    [action "size -" #(swap! focus update-flex-prop :flex-grow - step)]
+    [action "order +" #(swap! focus update-flex-prop :order inc)]
+    [action "order -" #(swap! focus update-flex-prop :order dec)]
+    [action "switch dir" (fn [] (swap! focus update-flex-prop :flex-direction
+                                       #(if (= % "row") "column" "row")))]]
 
    [:i.fa.fa-cog
     {:style {:font-size :22px
