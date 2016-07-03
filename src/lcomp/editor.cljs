@@ -2,7 +2,8 @@
   (:require-macros [reagent.ratom :refer [reaction]])
   (:require [reagent.core :as r :refer [atom]]
             [lcomp.pure2 :as lp]
-            [lcomp.css-props :refer [css-props]]))
+            [lcomp.css-props :refer [css-props]]
+            [semantic.sidebar :refer [sidebar]]))
 
 (enable-console-print!)
 
@@ -10,6 +11,7 @@
 (defn $1 [s] (first ($ s)))
 (defn tval [e] (.. e -target -value))
 (defn styles [el] (js/window.getComputedStyle (r/dom-node el)))
+(defn hover? [e] (= (e.parentElement.querySelector ":hover") e))
 
 (defn dimensions-map [el]
   (let [styles (styles el)
@@ -147,15 +149,6 @@
               :on-change (fn [e] (reset! c (tval e)))
               :type "text"
               :value (or @c (get default-flex-props k))}]]))
-
-(def button-styles
-  {:padding :5px
-   :margin "10px 4px"
-   :background :lightgrey
-   :border-radius :4px})
-
-(defn button [props txt]
-  [:span (update props :style merge button-styles) txt])
 
 (defn- update-flex-prop [this k f & args]
   (update-in this
@@ -349,9 +342,9 @@
    [:div.ui.buttons
     {:style {:padding "5px"}}
     [action "add child" #(swap! layout lp/insert-child {:path focus-path})]
-    [action "kill" #(swap! layout lp/kill {:path focus-path})]
-    [action "spread" #(swap! layout lp/spread {:path focus-path})]
-    [action "wrap" #(swap! layout lp/wrap {:path focus-path})]]
+    [action "kill" #(swap! layout lp/kill focus-path)]
+    [action "spread" #(swap! layout lp/spread focus-path)]
+    [action "wrap" #(swap! layout lp/wrap focus-path)]]
    [:div.ui.buttons
     {:style {:padding "5px"}}
     [action "size +" #(swap! focus update-flex-prop :flex-grow + step)]
@@ -445,6 +438,17 @@
 
 ;; main component -----------------------------------------------
 
+(defn test-sidebar [state]
+  (let [local-state (r/atom {:open-sections #{}})]
+    (fn []
+      [:div.sidepanel
+       {:style {:position :fixed
+                :min-height :100vh
+                :top 0
+                :right 0
+                :width :400px
+                :background :purple}}])))
+
 (defn layout-composer [{:keys [layout] :as props}]
   (let [state (atom {:layout (or layout (lp/layout))
                      :focus-path []
@@ -452,7 +456,7 @@
         focus-path (r/cursor state [:focus-path])
         layout (reaction (r/cursor state [:layout]))
         props-panel? (r/cursor state [:props-panel?])
-        focus (reaction (r/cursor state (apply vector :layout (lp/lpath (:focus-path @state)))))]
+        focus (reaction (r/cursor state (into [:layout] (lp/lpath (:focus-path @state)))))]
     (r/create-class
       {:reagent-render
        (fn []
@@ -462,6 +466,7 @@
                           :height :100vh
                           :width :100vw}}
                  (:wrapper props))
+          [sidebar {:content (list)}]
           [actions @layout @focus @focus-path props-panel?]
           [props-panel props-panel? @focus]
           [simple-layout {:layout @layout
