@@ -115,7 +115,7 @@
 (def default-placeholder-component
   [:div {:style {:width :100%
                  :height :100%
-                 :background :lightgrey}}])
+                 :background-color :lightgrey}}])
 
 ;; main ------------------------------------
 
@@ -135,12 +135,13 @@
        (fn [{:keys [layout path env]
              :or {path []}}]
          (let [{:keys [style childs comp]} @layout]
-           [:div {:data-path path
-                  :style (merge default-layout-style style)}
+           ^{:key (str "container-" path)}
+           [:div.layout
+            {:data-path path
+             :style (merge default-layout-style style)}
             (if-let [xs (seq childs)]
               (for [[idx] (u/indexed xs)]
-                [layout-comp {:key (str "container-" path)
-                              :layout (r/cursor layout [:childs idx])
+                [layout-comp {:layout (r/cursor layout [:childs idx])
                               :path (conj path idx)}])
               (if comp
                 (let [[comp-key & comp-args] comp]

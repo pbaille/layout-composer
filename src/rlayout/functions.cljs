@@ -8,6 +8,7 @@
 (def empty-layout
   (t :layout
      {:current :default
+      :style {}
       :responses []
       :childs []}))
 

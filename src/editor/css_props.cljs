@@ -1,4 +1,61 @@
-(ns rlayout.css-props)
+(ns editor.css-props
+  (:require [rlayout.utils :as u]))
+
+(def default-flex-props
+  {:flex-direction "row"
+   :flex-wrap "nowrap"
+   :justify-content "flex-start"
+   :align-items "stretch"
+   :align-content "stretch"
+   :order 1
+   :flex-grow 1
+   :flex-shrink 0
+   :flex-basis "auto"
+   :align-self "auto"})
+
+(defn update-flex-prop [this k f & args]
+  (u/update-in this
+               [:style k]
+               (fn [x]
+               (apply f (or x (get default-flex-props k)) args))))
+
+(def flex-parent-opts
+  {:flex-direction #{:row :column}
+   :flex-wrap #{:wrap :nowrap :wrap-reverse}
+   :justify-content #{:flex-start
+                      :flex-end
+                      :center
+                      :space-between
+                      :space-around}
+   :align-items #{:flex-start
+                  :flex-end
+                  :center
+                  :baseline
+                  :stretch}
+   :align-content #{:flex-start
+                    :flex-end
+                    :center
+                    :stretch
+                    :space-between
+                    :space-around}})
+
+(def flex-child-opts
+  {:order :int
+   :flex-grow :float
+   :flex-shrink :float
+   :flex-basis #{:auto
+                 {:val :float
+                  :unit [:% :px :em :rem :vh :vw :vmin :vmax :ex :cm :mm :in :pt :pc]}}
+   :align-self #{:auto
+                 :flex-start
+                 :flex-end
+                 :center
+                 :baseline
+                 :stretch}})
+
+(def flex-opts
+  (merge flex-child-opts
+         flex-parent-opts))
 
 (def css-props
   [:all
@@ -166,3 +223,4 @@
    :word-spacing
    :word-wrap
    :z-index])
+
