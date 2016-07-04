@@ -1,4 +1,4 @@
-# lcomp
+# rlayout
 
 Reagent Layout Composer
 

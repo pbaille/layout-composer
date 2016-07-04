@@ -1,4 +1,4 @@
-(ns lcomp.css-props)
+(ns rlayout.css-props)
 
 (def css-props
   [:all

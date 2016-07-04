@@ -2,7 +2,7 @@
 <project version="4">
     <component name="ChangeListManager">
         <list default="true" id="55a2d7e1-f50f-4ccc-a66a-7ceb6632a9b3" name="Default" comment="" />
-        <ignored path="lcomp.iws" />
+        <ignored path="rlayout.iws" />
         <ignored path=".idea/workspace.xml" />
         <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
         <option name="TRACKING_ENABLED" value="true" />
@@ -17,7 +17,7 @@
     </component>
     <component name="ExecutionTargetManager" SELECTED_TARGET="default_target" />
     <component name="FavoritesManager">
-        <favorites_list name="lcomp" />
+        <favorites_list name="rlayout" />
     </component>
     <component name="NamedScopeManager">
         <order />
@@ -55,17 +55,17 @@
                 <subPane>
                     <PATH>
                         <PATH_ELEMENT>
-                            <option name="myItemId" value="lcomp" />
+                            <option name="myItemId" value="rlayout" />
                             <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
                         </PATH_ELEMENT>
                     </PATH>
                     <PATH>
                         <PATH_ELEMENT>
-                            <option name="myItemId" value="lcomp" />
+                            <option name="myItemId" value="rlayout" />
                             <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
                         </PATH_ELEMENT>
                         <PATH_ELEMENT>
-                            <option name="myItemId" value="lcomp" />
+                            <option name="myItemId" value="rlayout" />
                             <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
                         </PATH_ELEMENT>
                     </PATH>
@@ -128,7 +128,7 @@
         </configuration>
         <configuration default="false" name="clj" type="ClojureREPL" factoryName="Local">
             <setting name="replType" value="1" />
-            <module name="lcomp" />
+            <module name="rlayout" />
             <setting name="jvmArgs" value="" />
             <setting name="parameters" value="" />
             <setting name="workingDir" value="$PROJECT_DIR$" />
@@ -137,7 +137,7 @@
         </configuration>
         <configuration default="false" name="cljs" type="ClojureREPL" factoryName="Local">
             <setting name="replType" value="2" />
-            <module name="lcomp" />
+            <module name="rlayout" />
             <setting name="jvmArgs" value="" />
             <setting name="parameters" value="script/fig.clj" />
             <setting name="workingDir" value="$PROJECT_DIR$" />

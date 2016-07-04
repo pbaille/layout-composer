@@ -1,4 +1,4 @@
-(ns lcomp.styles.core
+(ns layout.styles.core
   (:require [garden.def :refer [defstylesheet defstyles]]
     [garden.units :refer [px]]))
 

@@ -42,9 +42,9 @@ i.icon.star.half:before { content: '\e701'; } /* '' */
 i.icon.lock:before { content: '🔒'; } /* '\1f512' */
 i.icon.unlock:before { content: '🔓'; } /* '\1f513' */
 
-i.icon.layout.grid:before { content: '\e80c'; } /* '' */
-i.icon.layout.block:before { content: '\e708'; } /* '' */
-i.icon.layout.list:before { content: '\e80b'; } /* '' */
+i.icon.rlayout.grid:before { content: '\e80c'; } /* '' */
+i.icon.rlayout.block:before { content: '\e708'; } /* '' */
+i.icon.rlayout.list:before { content: '\e80b'; } /* '' */
 
 i.icon.heart.empty:before { content: '\2661'; } /* '♡' */
 i.icon.heart:before { content: '\2665'; } /* '♥' */

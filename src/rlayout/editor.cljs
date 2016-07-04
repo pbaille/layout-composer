@@ -1,8 +1,8 @@
-(ns lcomp.editor
+(ns rlayout.editor
   (:require-macros [reagent.ratom :refer [reaction]])
   (:require [reagent.core :as r :refer [atom]]
-            [lcomp.pure2 :as lp]
-            [lcomp.css-props :refer [css-props]]
+            [rlayout.functions :as lp]
+            [rlayout.css-props :refer [css-props]]
             [semantic.sidebar :refer [sidebar]]))
 
 (enable-console-print!)
@@ -361,7 +361,7 @@
              :padding-left :10px}
      :on-click #(swap! props-panel? not)}]])
 
-;; layout component ------------------------------------------------------
+;; rlayout component ------------------------------------------------------
 
 (defn simple-layout []
   (letfn [(respond [this]

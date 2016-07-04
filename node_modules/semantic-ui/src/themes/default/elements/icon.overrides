@@ -216,9 +216,9 @@ i.icon.sign.language:before { content: "\f2a7"; }
 i.icon.low.vision:before { content: "\f2a8"; }
 
 /* View Adjustment */
-i.icon.block.layout:before { content: "\f009"; }
-i.icon.grid.layout:before { content: "\f00a"; }
-i.icon.list.layout:before { content: "\f00b"; }
+i.icon.block.rlayout:before { content: "\f009"; }
+i.icon.grid.rlayout:before { content: "\f00a"; }
+i.icon.list.rlayout:before { content: "\f00b"; }
 i.icon.zoom:before { content: "\f00e"; }
 i.icon.zoom.out:before { content: "\f010"; }
 i.icon.resize.vertical:before { content: "\f07d"; }
