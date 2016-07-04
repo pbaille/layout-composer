@@ -5,17 +5,21 @@
             [editor.css-props :as cp]
             [editor.utils :as eu]
             [rlayout.functions :as rlf]
-            [rlayout.utils :as rlu]))
+            [rlayout.utils :as rlu]
+            [rlayout.utils :as u]))
 
 (def config
   (atom {:step 0.1}))
 
 ;; constraints ---------------------------------------------------
 
-(defn constraint-editor [state]
+(defn kws->options [xs]
+  (map #(hash-map :name (name %) :value %) xs))
+
+(defn constraint-editor [{state :constraint cm :constraints-map}]
   [:div.media-query.ui.input.labeled
    [cs/labeled-dropdown {:cursor (r/cursor state [0])
-                         :options nil #_(kws->options (keys @rlf/constraint-type->fn))}]
+                         :options (kws->options (keys cm))}]
    [:input
     {:type :number
      :placeholder "value"
@@ -23,12 +27,13 @@
      :on-change (fn [e] (swap! state assoc 1 (int (eu/tval e))))}]
    [:div.ui.button {:on-click #(reset! state nil)} "-"]])
 
-(defn constraints-editor [xs]
+(defn constraints-editor [{xs :constraints cm :constraints-map}]
   [:div.constraints-editor
    (doall
      (for [[idx] (map vector (range) (remove nil? @xs))]
        ^{:key (str "constraint_" idx)}
-       [constraint-editor (r/cursor xs [idx])]))
+       [constraint-editor {:constraint (r/cursor xs [idx])
+                           :constraints-map cm}]))
    [:div.ui.button {:on-click (fn [] (swap! xs conj [nil nil]))} "+"]])
 
 ;; responses -----------------------------------------------------
@@ -76,7 +81,7 @@
                  (rlu/first-idx #(= edited-id (:id %)) @responses))))}
     ">"]])
 
-(defn response-editor [{:keys [responses idx] :as props}]
+(defn response-editor [{:keys [responses idx constraints-map] :as props}]
   (let [response (r/cursor responses [idx])]
     [:div.response-editor
      [move-response-buttons props]
@@ -86,11 +91,12 @@
        {:type :text
         :value (name (:id @response))
         :on-change #(swap! response assoc :id (eu/tval %))}]]
-     [constraints-editor (r/cursor response [:constraints])]]))
+     [constraints-editor {:constraints (r/cursor response [:constraints])
+                          :constraints-map constraints-map}]]))
 
-(defn responses [{:keys [xs current]}]
+(defn responses [_]
   (let [edited (r/atom nil)]
-    (fn [{:keys [xs current]}]
+    (fn [{:keys [xs current constraints-map]}]
       [:div.responses
        {:style {:width :100%}}
        [:div.responses-index.ui.buttons.fluid.top.attached
@@ -105,7 +111,8 @@
        (when-let [idx @edited]
          [response-editor {:responses xs
                            :idx idx
-                           :edited edited}])])))
+                           :edited edited
+                           :constraints-map constraints-map}])])))
 
 ;; css props ---------------------------------------------------------------
 
@@ -136,7 +143,8 @@
 
 (defn props-panel [state]
   (let [open? (reaction (:props-panel? @state))
-        focus-reaction (reaction (r/cursor state (into [:layout] (rlf/lpath (:focus-path @state)))))]
+        focus-reaction (reaction (r/cursor state (into [:layout] (rlf/lpath (:focus-path @state)))))
+        constraints-map (reaction (get-in @state [:env :constraints-map]))]
     (fn []
       (let [focus @focus-reaction]
         (when @open?
@@ -173,16 +181,17 @@
             [cs/select-coll focus :align-self]
             [cs/text-input focus :flex-basis]]
            #_[:div.css-props
-            {:style {:padding "0 15px 15px 15px"}}
-            [:h3 {:style {:padding :10px
-                          :text-align :center}}
-             "css props"]
-            (doall
-              (for [[idx k] (map vector (range) (:css-props @focus))]
-                ^{:key k}
-                [css-prop (r/cursor focus [:css-props idx])]))]
+              {:style {:padding "0 15px 15px 15px"}}
+              [:h3 {:style {:padding :10px
+                            :text-align :center}}
+               "css props"]
+              (doall
+                (for [[idx k] (map vector (range) (:css-props @focus))]
+                  ^{:key k}
+                  [css-prop (r/cursor focus [:css-props idx])]))]
            [responses {:xs (r/cursor focus [:responses])
-                       :current (:current @focus)}]])))))
+                       :current (:current @focus)
+                       :constraints-map constraints-map}]])))))
 
 ;; actions ---------------------------------------------------------------
 
@@ -191,9 +200,16 @@
    {:on-click click-handler}
    n])
 
+(defn focus-path-shift [p l dir]
+  (let [bp (rlf/brothers-path p)]
+    (conj (u/butlastv p)
+          (u/mod-shift (count (get-in l bp))
+                       (last p)
+                       dir))))
+
 (defn actions [state]
   (let [layout (r/cursor state [:layout])
-        focus-path (reaction (:focus-path @state))
+        focus-path (r/cursor state [:focus-path])
         props-panel? (r/cursor state [:props-panel?])
         focus-reaction (reaction (r/cursor state (into [:layout] (rlf/lpath @focus-path))))]
     (fn []
@@ -205,6 +221,10 @@
          [:div.ui.buttons
           {:style {:padding "5px"}}
           [action "add child" #(swap! layout rlf/insert-child {:path @focus-path})]
+          [action "<<" #(do (swap! layout rlf/mv @focus-path :left)
+                            (swap! focus-path focus-path-shift @layout :left))]
+          [action ">>" #(do (swap! layout rlf/mv @focus-path :right)
+                            (swap! focus-path focus-path-shift @layout :right))]
           [action "kill" #(swap! layout rlf/kill @focus-path)]
           [action "spread" #(swap! layout rlf/spread @focus-path)]
           [action "wrap" #(swap! layout rlf/wrap @focus-path)]]

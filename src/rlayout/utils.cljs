@@ -39,8 +39,17 @@
 (defn idx-shift [v idx dir]
   (let [cnt (count v)]
     (condp = dir
-      :left (if (zero? idx) v (vswap v idx (dec idx)))
-      :right (if (= (dec cnt) idx) v (vswap v idx (inc idx))))))
+      :left (if (zero? idx)
+              (conj (vec (next v)) (first v))
+              (vswap v idx (dec idx)))
+      :right (if (= (dec cnt) idx)
+               (vec (cons (last v) (butlast v)))
+               (vswap v idx (inc idx))))))
+
+(defn mod-shift [modulo idx dir]
+  (condp = dir
+    :left (mod (dec idx) modulo)
+    :right (mod (inc idx) modulo)))
 
 (defn first-where [pred coll]
   (first (filter pred coll)))
