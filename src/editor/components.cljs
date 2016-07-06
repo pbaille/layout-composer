@@ -50,6 +50,20 @@
            (.dropdown (js/$ (str "#" uid))
                       (clj->js {:onChange #(on-change cursor %)}))))})))
 
+(defn accordion [{:keys [cursor xs]}]
+  (let [uid (gensym)]
+    (r/create-class
+      {:reagent-render
+       (fn [{:keys [class props xs]}]
+         [:div.ui.styled.fluid.accordion
+          (merge {:id uid :class class} props)
+          xs])
+       :component-did-mount
+       (fn [this]
+         (let [on-change (:on-change (r/props this) reset!)]
+           (.accordion (js/$ (str "#" uid))
+                       (clj->js {:onChange #(on-change cursor %)}))))})))
+
 (defn select-coll [state k]
   (let [c (r/cursor state [:style k])]
     (fn []

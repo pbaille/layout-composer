@@ -31,12 +31,13 @@
      :placeholder "value"
      :value (second @state)
      :on-change (fn [e] (swap! state assoc 1 (int (eu/tval e))))}]
-   [:div.ui.button.right.attached.negative
+   [:div.ui.icon.button.right.attached.negative
     {:on-click #(swap! cs u/rem-idx idx)}
     [:i.trash.icon]]])
 
 (defn constraints-editor [{xs :constraints cm :constraints-map}]
   [:div.constraints-editor
+   [:div.ui.header "Constraints"]
    (doall
      (for [[idx] (map vector (range) (remove nil? @xs))]
        ^{:key (str "constraint_" idx)}
@@ -57,7 +58,7 @@
 
 (defn response-span [{:keys [state edited current idx]}]
   (let [edited? (= @edited idx)]
-    [:div.ui.button
+    [:div.title
      {:class
       (str
         (when (and (not edited?) (= (:id state) current)) "red")
@@ -93,13 +94,7 @@
 
 (defn response-editor [{:keys [responses idx constraints-map] :as props}]
   (let [response (r/cursor responses [idx])]
-    [:div.response-editor
-     {:style
-      {:display :flex
-       :flex-flow "column nowrap"
-       :justify-content :center
-       :align-content :center
-       :border-top "5px solid #a333c8"}}
+    [:div.response-editor.content
      [move-response-buttons props]
      [:div.input.ui.labeled
       [:div.ui.label "Name: "]
@@ -107,28 +102,31 @@
        {:type :text
         :value (name (:id @response))
         :on-change #(swap! response assoc :id (eu/tval %))}]]
+     [:div.ui.divider]
      [constraints-editor {:constraints (r/cursor response [:constraints])
                           :constraints-map constraints-map}]]))
 
-(defn responses [_]
+(defn responses-editor [_]
   (let [edited (r/atom nil)]
     (fn [{:keys [xs current constraints-map]}]
-      [:div.responses
+      [:div.responses.ui.segment
        {:style {:width :100%}}
-       [:div.responses-index.ui.buttons.fluid.top.attached
-        {:style {:width :400px
-                 :margin :auto}}
-        [:div.ui.button
-         {:class (when (or (not current) (= :default current)) "red")}
-         "default"]
-        (doall (for [[idx r] (map vector (range) @xs)]
-                 [response-span {:state r :edited edited :current current :idx idx}]))
-        [:div.ui.button {:on-click #(swap! xs conj (response))} "+"]]
-       (when-let [idx @edited]
-         [response-editor {:responses xs
-                           :idx idx
-                           :edited edited
-                           :constraints-map constraints-map}])])))
+       [:div.ui.header "Responses"]
+       [:div.ui.divider]
+       [cs/accordion
+        {:cursor (atom {})
+         :xs (apply concat
+                    (conj (vec
+                            (for [[idx r] (map vector (range) @xs)]
+                              [[response-span {:state r
+                                               :edited edited
+                                               :current current
+                                               :idx idx}]
+                               [response-editor {:responses xs
+                                                 :idx idx
+                                                 :edited edited
+                                                 :constraints-map constraints-map}]]))
+                          [[:div.title {:on-click #(swap! xs conj (response))} "+"]]))}]])))
 
 ;; css props ---------------------------------------------------------------
 
@@ -153,7 +151,7 @@
                [:input {:type "text" :placeholder "value" :value @value :on-change #(swap! state assoc 1 (eu/tval %))}]])
        :component-did-mount
        (fn [] (.dropdown (js/$ (str "#" uid))
-                         (clj->js {:onChange (fn [v] (println v) (swap! state assoc 0 (keyword v)))})))})))
+                         (clj->js {:onChange (fn [v] (swap! state assoc 0 (keyword v)))})))})))
 
 ;; props panel -------------------------------------------------------------
 
@@ -164,16 +162,11 @@
     (fn []
       (let [focus @focus-reaction]
         (when @open?
-          [:div.flexprops
-           {:style {:display :flex
-                    :flex-flow "row wrap"
-                    :justify-content "center"}}
+          [:div.flexprops.ui.segment
+           [:div.ui.header "CSS"]
+           [:div.ui.divider]
            [:div.parent-props
-            {:style {:padding "0 15px 15px 15px"}}
-            [:h3 {:style {:padding :10px
-                          :margin 0
-                          :text-align :center}}
-             "parent props"]
+            [:div.ui.medium.header "Flex parent"]
             (doall
               (for [k [:flex-direction
                        :flex-wrap
@@ -182,12 +175,9 @@
                        :align-content]]
                 ^{:key k}
                 [cs/select-coll focus k]))]
+           [:div.ui.divider]
            [:div.child-props
-            {:style {:padding "0 15px 15px 15px"}}
-            [:h3 {:style {:padding :10px
-                          :margin 0
-                          :text-align :center}}
-             "child props"]
+            [:div.ui.medium.header "Flex child"]
             (doall
               (for [k [:order
                        :flex-grow
@@ -204,10 +194,17 @@
               (doall
                 (for [[idx k] (map vector (range) (:css-props @focus))]
                   ^{:key k}
-                  [css-prop (r/cursor focus [:css-props idx])]))]
-           [responses {:xs (r/cursor focus [:responses])
-                       :current (:current @focus)
-                       :constraints-map @constraints-map}]])))))
+                  [css-prop (r/cursor focus [:css-props idx])]))]])))))
+
+(defn responses [state]
+  (let [focus-reaction (reaction (r/cursor state (into [:layout] (rlf/lpath (:focus-path @state)))))
+        constraints-map (reaction (get-in @state [:env :constraints-map]))]
+    (fn []
+      (let [focus @focus-reaction]
+        [responses-editor
+         {:xs (r/cursor focus [:responses])
+          :current (:current @focus)
+          :constraints-map @constraints-map}]))))
 
 ;; actions ---------------------------------------------------------------
 
@@ -230,55 +227,53 @@
         focus-reaction (reaction (r/cursor state (into [:layout] (rlf/lpath @focus-path))))]
     (fn []
       (let [focus @focus-reaction]
-        [:div.actions
-         {:style {:display :flex
-                  :flex-flow "row nowrap"
-                  :justify-content :center}}
-         [:div.ui.buttons.compact.purple
-          {:style {:padding "5px"}}
-          [action [:i.icon.plus]
-           #(swap! layout rlf/insert-child {:path @focus-path})]
-          [action [:i.icon.chevron.left]
-           #(do (swap! layout rlf/mv @focus-path :left)
-                (swap! focus-path focus-path-shift @layout :left))]
-          [action [:i.icon.chevron.right]
-           #(do (swap! layout rlf/mv @focus-path :right)
-                (swap! focus-path focus-path-shift @layout :right))]
-          [action [:i.icon.ban]
-           #(swap! layout rlf/kill @focus-path)]
-          [action [:i.icon.sign.out]
-           #(swap! layout rlf/spread @focus-path)]
-          [action [:i.icon.sign.in]
-           #(swap! layout rlf/wrap @focus-path)]]
-         [:div.ui.buttons.compact.purple
-          {:style {:padding "5px"}}
-          [action [:i.icon.expand]
-           #(swap! focus cp/update-flex-prop :flex-grow + (:step @config))]
-          [action [:i.icon.compress]
-           #(swap! focus cp/update-flex-prop :flex-grow - (:step @config))]
-          (let [c (if (= (get-in @focus [:style :flex-direction]) "column")
-                    "resize horizontal"
-                    "resize vertical")]
-            [action [:i.icon {:class c}]
-             (fn [] (swap! focus cp/update-flex-prop :flex-direction
-                           #(if (= % "row") "column" "row")))])]
-
-         [:i.fa.fa-cog
-          {:style {:font-size :22px
-                   :color :#db2828
-                   :align-self :center
-                   :padding-left :10px}
-           :on-click #(swap! props-panel? not)}]]))))
+        [:div.ui.segment
+         [:div.ui.header "Actions"]
+         [:div.ui.divider]
+         [:div
+          [:div.ui.buttons.compact.purple
+           {:style {:padding "5px"}}
+           [action [:i.icon.plus]
+            #(swap! layout rlf/insert-child {:path @focus-path})]
+           [action [:i.icon.chevron.left]
+            #(do (swap! layout rlf/mv @focus-path :left)
+                 (swap! focus-path focus-path-shift @layout :left))]
+           [action [:i.icon.chevron.right]
+            #(do (swap! layout rlf/mv @focus-path :right)
+                 (swap! focus-path focus-path-shift @layout :right))]
+           [action [:i.icon.ban]
+            #(swap! layout rlf/kill @focus-path)]
+           [action [:i.icon.sign.out]
+            #(swap! layout rlf/spread @focus-path)]
+           [action [:i.icon.sign.in]
+            #(swap! layout rlf/wrap @focus-path)]]
+          [:div.ui.buttons.compact.purple
+           {:style {:padding "5px"
+                    :margin :auto}}
+           [action [:i.icon.expand]
+            #(swap! focus cp/update-flex-prop :flex-grow + (:step @config))]
+           [action [:i.icon.compress]
+            #(swap! focus cp/update-flex-prop :flex-grow - (:step @config))]
+           (let [c (if (= (get-in @focus [:style :flex-direction]) "column")
+                     "resize horizontal"
+                     "resize vertical")]
+             [action [:i.icon {:class c}]
+              (fn [] (swap! focus cp/update-flex-prop :flex-direction
+                            #(if (= % "row") "column" "row")))])]]]))))
 
 (defn sidepanel [state]
   (let [open? (reaction (:props-panel? @state))]
     (fn []
       [:div
-       {:style {:position :fixed
+       {:style {:overflow :scroll
+                :padding :15px
+                :background :white
+                :position :fixed
                 :top 0
                 :min-height :100vh
                 :left (if true 0 500)
                 :width :400px
                 :animation "left linear .5s"}}
        [actions state]
-       [props-panel state]])))
+       [props-panel state]
+       [responses state]])))

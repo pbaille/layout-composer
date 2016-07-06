@@ -43,7 +43,7 @@
                           (apply str (interpose "," focus-path))
                           "\"]"))]
 
-    (doseq [e (eu/$ ".layout")]
+    (doseq [e (seq (eu/$ ".layout"))]
       (aset (.-style e)
             "borderColor"
             "rgba(0,0,0,.1)"))
