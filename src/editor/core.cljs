@@ -52,15 +52,24 @@
           "borderColor"
           "#db2828")))
 
-(defn layout-editor [layout]
-  (let [state (r/atom {:layout (or layout (rlf/layout))
-                       :focus-path []
-                       :props-panel? true})
-        layout (r/cursor state [:layout])]
+(def default-env
+  {:components-map {}
+   :constraints-map rlc/default-constraints-map
+   :state (r/atom {})
+   :placeholder rlc/default-placeholder-component})
+
+(defn layout-editor [{:keys [layout env]}]
+  (let [env (merge default-env env)
+        local-state (r/atom {:layout (or layout (rlf/layout))
+                             :focus-path []
+                             :props-panel? true
+                             :env env})
+        layout (r/cursor local-state [:layout])
+        focus-path (reaction (:focus-path @local-state))]
     (r/create-class
       {:reagent-render
        (fn []
-         (:focus-path @state)
+         (:focus-path @local-state)
          [:div
           {:style {:display :flex
                    :justify-content :center
@@ -68,17 +77,16 @@
                    :flex-flow "column nowrap"
                    :min-height :100vh
                    :min-width :100vw}}
-          [ec/actions state]
-          [ec/props-panel state]
-          [rlc/layout-comp {:layout layout
-                            :env {:components-map {}
-                                  :constraints-map {}}}]])
+          #_[ec/actions local-state]
+          #_[ec/props-panel local-state]
+          [ec/sidepanel local-state]
+          [rlc/layout-comp {:layout layout :env env}]])
        :component-did-update
-       #(render-focused (:focus-path @state))
+       #(render-focused @focus-path)
        :component-did-mount
        (fn [_]
-         (render-focused (:focus-path @state))
-         (register-key-events state))})))
+         (render-focused @focus-path)
+         (register-key-events local-state))})))
 
 (r/render [layout-editor
            {:layout

@@ -14,18 +14,26 @@
 ;; constraints ---------------------------------------------------
 
 (defn kws->options [xs]
+  (println "kws->opts" xs)
   (map #(hash-map :name (name %) :value %) xs))
 
-(defn constraint-editor [{state :constraint cm :constraints-map}]
-  [:div.media-query.ui.input.labeled
-   [cs/labeled-dropdown {:cursor (r/cursor state [0])
-                         :options (kws->options (keys cm))}]
-   [:input
+(defn constraint-editor [{state :constraint
+                          cs :constraints
+                          idx :idx
+                          cm :constraints-map}]
+  (println cm)
+  [:div.media-query.ui.input.buttons
+   [cs/dropdown {:class "left attached button"
+                 :cursor (r/cursor state [0])
+                 :options (kws->options (keys cm))}]
+   [:input.ui.button.attached
     {:type :number
      :placeholder "value"
      :value (second @state)
      :on-change (fn [e] (swap! state assoc 1 (int (eu/tval e))))}]
-   [:div.ui.button {:on-click #(reset! state nil)} "-"]])
+   [:div.ui.button.right.attached.negative
+    {:on-click #(swap! cs u/rem-idx idx)}
+    [:i.trash.icon]]])
 
 (defn constraints-editor [{xs :constraints cm :constraints-map}]
   [:div.constraints-editor
@@ -33,8 +41,10 @@
      (for [[idx] (map vector (range) (remove nil? @xs))]
        ^{:key (str "constraint_" idx)}
        [constraint-editor {:constraint (r/cursor xs [idx])
+                           :constraints xs
+                           :idx idx
                            :constraints-map cm}]))
-   [:div.ui.button {:on-click (fn [] (swap! xs conj [nil nil]))} "+"]])
+   [:div.ui.button {:on-click (fn [] (swap! xs conj [:min-width 0]))} "+"]])
 
 ;; responses -----------------------------------------------------
 
@@ -84,6 +94,12 @@
 (defn response-editor [{:keys [responses idx constraints-map] :as props}]
   (let [response (r/cursor responses [idx])]
     [:div.response-editor
+     {:style
+      {:display :flex
+       :flex-flow "column nowrap"
+       :justify-content :center
+       :align-content :center
+       :border-top "5px solid #a333c8"}}
      [move-response-buttons props]
      [:div.input.ui.labeled
       [:div.ui.label "Name: "]
@@ -191,12 +207,12 @@
                   [css-prop (r/cursor focus [:css-props idx])]))]
            [responses {:xs (r/cursor focus [:responses])
                        :current (:current @focus)
-                       :constraints-map constraints-map}]])))))
+                       :constraints-map @constraints-map}]])))))
 
 ;; actions ---------------------------------------------------------------
 
 (defn action [n click-handler]
-  [:div.ui.button.purple
+  [:div.ui.button
    {:on-click click-handler}
    n])
 
@@ -218,24 +234,34 @@
          {:style {:display :flex
                   :flex-flow "row nowrap"
                   :justify-content :center}}
-         [:div.ui.buttons
+         [:div.ui.buttons.compact.purple
           {:style {:padding "5px"}}
-          [action "add child" #(swap! layout rlf/insert-child {:path @focus-path})]
-          [action "<<" #(do (swap! layout rlf/mv @focus-path :left)
-                            (swap! focus-path focus-path-shift @layout :left))]
-          [action ">>" #(do (swap! layout rlf/mv @focus-path :right)
-                            (swap! focus-path focus-path-shift @layout :right))]
-          [action "kill" #(swap! layout rlf/kill @focus-path)]
-          [action "spread" #(swap! layout rlf/spread @focus-path)]
-          [action "wrap" #(swap! layout rlf/wrap @focus-path)]]
-         [:div.ui.buttons
+          [action [:i.icon.plus]
+           #(swap! layout rlf/insert-child {:path @focus-path})]
+          [action [:i.icon.chevron.left]
+           #(do (swap! layout rlf/mv @focus-path :left)
+                (swap! focus-path focus-path-shift @layout :left))]
+          [action [:i.icon.chevron.right]
+           #(do (swap! layout rlf/mv @focus-path :right)
+                (swap! focus-path focus-path-shift @layout :right))]
+          [action [:i.icon.ban]
+           #(swap! layout rlf/kill @focus-path)]
+          [action [:i.icon.sign.out]
+           #(swap! layout rlf/spread @focus-path)]
+          [action [:i.icon.sign.in]
+           #(swap! layout rlf/wrap @focus-path)]]
+         [:div.ui.buttons.compact.purple
           {:style {:padding "5px"}}
-          [action "size +" #(swap! focus cp/update-flex-prop :flex-grow + (:step @config))]
-          [action "size -" #(swap! focus cp/update-flex-prop :flex-grow - (:step @config))]
-          [action "order +" #(swap! focus cp/update-flex-prop :order inc)]
-          [action "order -" #(swap! focus cp/update-flex-prop :order dec)]
-          [action "switch dir" (fn [] (swap! focus cp/update-flex-prop :flex-direction
-                                             #(if (= % "row") "column" "row")))]]
+          [action [:i.icon.expand]
+           #(swap! focus cp/update-flex-prop :flex-grow + (:step @config))]
+          [action [:i.icon.compress]
+           #(swap! focus cp/update-flex-prop :flex-grow - (:step @config))]
+          (let [c (if (= (get-in @focus [:style :flex-direction]) "column")
+                    "resize horizontal"
+                    "resize vertical")]
+            [action [:i.icon {:class c}]
+             (fn [] (swap! focus cp/update-flex-prop :flex-direction
+                           #(if (= % "row") "column" "row")))])]
 
          [:i.fa.fa-cog
           {:style {:font-size :22px
@@ -243,3 +269,16 @@
                    :align-self :center
                    :padding-left :10px}
            :on-click #(swap! props-panel? not)}]]))))
+
+(defn sidepanel [state]
+  (let [open? (reaction (:props-panel? @state))]
+    (fn []
+      [:div
+       {:style {:position :fixed
+                :top 0
+                :min-height :100vh
+                :left (if true 0 500)
+                :width :400px
+                :animation "left linear .5s"}}
+       [actions state]
+       [props-panel state]])))

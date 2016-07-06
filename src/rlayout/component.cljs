@@ -142,7 +142,8 @@
             (if-let [xs (seq childs)]
               (for [[idx] (u/indexed xs)]
                 [layout-comp {:layout (r/cursor layout [:childs idx])
-                              :path (conj path idx)}])
+                              :path (conj path idx)
+                              :env env}])
               (if comp
                 (let [[comp-key & comp-args] comp]
                   (into [(get-in env [:components-map comp-key]) (:state env)]
