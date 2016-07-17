@@ -124,6 +124,15 @@
 
 ;; responses -------------------------------------------------
 
+;constructor
+
+(defn response [& [spec]]
+  (merge
+    {:id (gensym "res")
+     :constraints []
+     :layout (layout)}
+    spec))
+
 ;paths
 
 (defn responses-path [p]

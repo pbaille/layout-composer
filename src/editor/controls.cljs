@@ -14,16 +14,16 @@
 ;; constraints ---------------------------------------------------
 
 (defn kws->options [xs]
-  (println "kws->opts" xs)
   (map #(hash-map :name (name %) :value %) xs))
 
 (defn constraint-editor [{state :constraint
                           cs :constraints
                           idx :idx
                           cm :constraints-map}]
-  (println cm)
-  [:div.media-query.ui.input.buttons
-   [cs/dropdown {:class "left attached button"
+  [:div.media-query.ui.input.buttons.fluid.compact
+   {:style {:margin-bottom :10px}}
+   [cs/dropdown {:props {:style {:width :44px :padding-left :10px}}
+                 :class "left attached button"
                  :cursor (r/cursor state [0])
                  :options (kws->options (keys cm))}]
    [:input.ui.button.attached
@@ -31,13 +31,14 @@
      :placeholder "value"
      :value (second @state)
      :on-change (fn [e] (swap! state assoc 1 (int (eu/tval e))))}]
-   [:div.ui.icon.button.right.attached.negative
-    {:on-click #(swap! cs u/rem-idx idx)}
+   [:div.ui.icon.button.negative.compact
+    {:style {:padding "10px 0"
+             :width 0}
+     :on-click #(swap! cs u/rem-idx idx)}
     [:i.trash.icon]]])
 
 (defn constraints-editor [{xs :constraints cm :constraints-map}]
   [:div.constraints-editor
-   [:div.ui.header "Constraints"]
    (doall
      (for [[idx] (map vector (range) (remove nil? @xs))]
        ^{:key (str "constraint_" idx)}
@@ -45,33 +46,19 @@
                            :constraints xs
                            :idx idx
                            :constraints-map cm}]))
-   [:div.ui.button {:on-click (fn [] (swap! xs conj [:min-width 0]))} "+"]])
+   [:div
+    {:style {:margin "10px 66px"}}
+    [:button.ui.icon.button.circular {:on-click (fn [] (swap! xs conj [:min-width 0]))} [:i.icon.plus]]
+    [:button.ui.icon.button.circular {:on-click (fn [] (swap! xs conj [:min-width 0]))} [:i.icon.checkmark]]
+    [:button.ui.icon.button.circular {:on-click (fn [] (swap! xs conj [:min-width 0]))} [:i.icon.remove]]]])
 
 ;; responses -----------------------------------------------------
 
-(defn response [& [spec]]
-  (merge
-    {:id (gensym "res")
-     :constraints []
-     :layout (rlf/layout)}
-    spec))
 
-(defn response-span [{:keys [state edited current idx]}]
-  (let [edited? (= @edited idx)]
-    [:div.title
-     {:class
-      (str
-        (when (and (not edited?) (= (:id state) current)) "red")
-        (when edited? "purple"))
-      :key (gensym)
-      :on-click (fn []
-                  (swap! edited
-                         (fn [eidx]
-                           (when-not (= eidx idx) idx))))}
-     (name (:id state))]))
 
-(defn move-response-buttons [{:keys [responses idx edited]}]
-  [:div.response-idx-editor.ui.buttons
+(defn move-response-buttons [{:keys [responses idx edited label]}]
+  [:div.response-idx-editor.ui.icon.buttons.fluid
+   (when label [:div.ui.button label])
    [:button.ui.button
     {:key :left
      :on-click
@@ -80,8 +67,7 @@
          (swap! responses rlu/idx-shift idx :left)
          (reset! edited
                  (rlu/first-idx #(= edited-id (:id %)) @responses))))}
-    "<"]
-   [:button.ui.button.icon [:i.icon.ban]]
+    [:i.icon.chevron.down]]
    [:button.ui.button
     {:key :right
      :on-click
@@ -90,43 +76,60 @@
          (swap! responses rlu/idx-shift idx :right)
          (reset! edited
                  (rlu/first-idx #(= edited-id (:id %)) @responses))))}
-    ">"]])
+    [:i.icon.chevron.up]]
+   [:button.ui.button.icon [:i.icon.ban]]
+   [:button.ui.button.icon [:i.icon.pencil]]])
 
-(defn response-editor [{:keys [responses idx constraints-map] :as props}]
+
+(defn response-editor [{:keys [state responses idx constraints-map] :as props}]
   (let [response (r/cursor responses [idx])]
-    [:div.response-editor.content
-     [move-response-buttons props]
-     [:div.input.ui.labeled
-      [:div.ui.label "Name: "]
-      [:input
-       {:type :text
-        :value (name (:id @response))
-        :on-change #(swap! response assoc :id (eu/tval %))}]]
-     [:div.ui.divider]
+    [:div
+     [:div.ui.header.small
+      [:div.input.ui
+       {:style {:width :100%}}
+       [:input {:type :text
+                :value (name (:id state))
+                :on-change () #_(swap! response assoc :id (eu/tval %))}]]]
      [constraints-editor {:constraints (r/cursor response [:constraints])
                           :constraints-map constraints-map}]]))
+
+(defn response [{:keys [state edited current idx] :as props}]
+  (let [edited? (= @edited idx)]
+    [:div
+     {:class (when (= (:id state) current) "red")
+      :key (gensym)
+      :on-click (fn []
+                  (swap! edited
+                         (fn [eidx]
+                           (when-not (= eidx idx) idx))))}
+     [:div.ui.container.fluid [move-response-buttons (assoc props :label (name (:id state)))]
+      ]]))
 
 (defn responses-editor [_]
   (let [edited (r/atom nil)]
     (fn [{:keys [xs current constraints-map]}]
       [:div.responses.ui.segment
        {:style {:width :100%}}
-       [:div.ui.header "Responses"]
+       [:div.ui.header "Responses"
+        [:div.ui.button.compact.right.floated
+         {:on-click #(swap! xs conj (rlf/response))} "+"]]
        [:div.ui.divider]
-       [cs/accordion
-        {:cursor (atom {})
-         :xs (apply concat
-                    (conj (vec
-                            (for [[idx r] (map vector (range) @xs)]
-                              [[response-span {:state r
-                                               :edited edited
-                                               :current current
-                                               :idx idx}]
-                               [response-editor {:responses xs
-                                                 :idx idx
-                                                 :edited edited
-                                                 :constraints-map constraints-map}]]))
-                          [[:div.title {:on-click #(swap! xs conj (response))} "+"]]))}]])))
+       (interpose
+         [:div.ui.divider]
+         (doall
+           (for [[idx r] (map vector (range) @xs)]
+             (if (= @edited idx)
+               [response-editor {:state r
+                                 :edited edited
+                                 :current current
+                                 :idx idx
+                                 :responses xs
+                                 :constraints-map constraints-map}]
+               [response {:state r
+                          :edited edited
+                          :current current
+                          :idx idx
+                          :responses xs}]))))])))
 
 ;; css props ---------------------------------------------------------------
 
@@ -231,25 +234,23 @@
          [:div.ui.header "Actions"]
          [:div.ui.divider]
          [:div
-          [:div.ui.buttons.compact.purple
-           {:style {:padding "5px"}}
-           [action [:i.icon.plus]
+          [:div.ui.buttons.compact.purple.fluid
+           {:style {:margin-bottom :10px}}
+           [action "Add" #_[:i.icon.plus]
             #(swap! layout rlf/insert-child {:path @focus-path})]
+           [action "Kill" #_[:i.icon.ban]
+            #(swap! layout rlf/kill @focus-path)]
+           [action "Spread" #_[:i.icon.sign.out]
+            #(swap! layout rlf/spread @focus-path)]
+           [action "Wrap" #_[:i.icon.sign.in]
+            #(swap! layout rlf/wrap @focus-path)]]
+          [:div.ui.buttons.compact.purple
            [action [:i.icon.chevron.left]
             #(do (swap! layout rlf/mv @focus-path :left)
                  (swap! focus-path focus-path-shift @layout :left))]
            [action [:i.icon.chevron.right]
             #(do (swap! layout rlf/mv @focus-path :right)
                  (swap! focus-path focus-path-shift @layout :right))]
-           [action [:i.icon.ban]
-            #(swap! layout rlf/kill @focus-path)]
-           [action [:i.icon.sign.out]
-            #(swap! layout rlf/spread @focus-path)]
-           [action [:i.icon.sign.in]
-            #(swap! layout rlf/wrap @focus-path)]]
-          [:div.ui.buttons.compact.purple
-           {:style {:padding "5px"
-                    :margin :auto}}
            [action [:i.icon.expand]
             #(swap! focus cp/update-flex-prop :flex-grow + (:step @config))]
            [action [:i.icon.compress]
@@ -262,18 +263,30 @@
                             #(if (= % "row") "column" "row")))])]]]))))
 
 (defn sidepanel [state]
-  (let [open? (reaction (:props-panel? @state))]
+  (let [open? (r/cursor state [:props-panel?])]
     (fn []
-      [:div
-       {:style {:overflow :scroll
-                :padding :15px
-                :background :white
-                :position :fixed
-                :top 0
-                :min-height :100vh
-                :left (if true 0 500)
-                :width :400px
-                :animation "left linear .5s"}}
-       [actions state]
-       [props-panel state]
-       [responses state]])))
+      (if @open?
+        [:div
+         {:style {:overflow :scroll
+                  :padding :15px
+                  :background :white
+                  :position :fixed
+                  :top 0
+                  :min-height :100vh
+                  :left (if true 0 500)
+                  :width :330px
+                  :animation "left linear .5s"}}
+         [:i.remove.icon {:on-click #(reset! open? false)}]
+         [actions state]
+         [props-panel state]
+         [responses state]]
+        [:div {:style {:position :fixed
+                       :top :50%
+                       :left -25
+                       :height :50px
+                       :width :50px
+                       :padding "15px 5px 5px 27px"
+                       :border-radius :25px
+                       :background :white}}
+         [:i.unordered.list.icon
+          {:on-click #(reset! open? true)}]]))))

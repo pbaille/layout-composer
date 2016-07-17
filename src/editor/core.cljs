@@ -7,6 +7,8 @@
             [editor.utils :as eu]
             [reagent.core :as r]))
 
+(enable-console-print!)
+
 ;; key events ---------------------------------------------------------
 
 (defn- nav-childs [state step]
