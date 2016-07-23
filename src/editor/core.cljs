@@ -12,6 +12,7 @@
 ;; key events ---------------------------------------------------------
 
 (defn- nav-childs [state step]
+  (println state)
   (update state
           :focus-path
           #(conj (u/butlastv %)
@@ -55,17 +56,18 @@
           "#db2828")))
 
 (def default-env
-  {:components-map {}
+  {:components-map  {}
    :constraints-map rlc/default-constraints-map
-   :state (r/atom {})
-   :placeholder rlc/default-placeholder-component})
+   :state           (r/atom {})
+   :placeholder     rlc/default-placeholder-component})
 
-(defn layout-editor [{:keys [layout env]}]
+(defn layout-editor [{:keys [layout env wrapper]}]
   (let [env (merge default-env env)
-        local-state (r/atom {:layout (or layout (rlf/layout))
-                             :focus-path []
+        local-state (r/atom {:layout       (or layout (rlf/layout))
+                             :focus-path   []
                              :props-panel? true
-                             :env env})
+                             :env          env})
+        sidepanel? (reaction (:props-panel? @local-state))
         layout (r/cursor local-state [:layout])
         focus-path (reaction (:focus-path @local-state))]
     (r/create-class
@@ -73,14 +75,16 @@
        (fn []
          (:focus-path @local-state)
          [:div
-          {:style {:display :flex
-                   :justify-content :center
-                   :align-content :center
-                   :flex-flow "column nowrap"
-                   :min-height :100vh
-                   :min-width :100vw}}
-          #_[ec/actions local-state]
-          #_[ec/props-panel local-state]
+          {:style (merge
+                    {:display         :flex
+                     :justify-content :center
+                     :align-content   :center
+                     :align-items     :center
+                     :flex-flow       "column nowrap"
+                     :max-height      :100vh
+                     :max-width       (if @sidepanel? "calc(100vw - 330px)" :100vw)
+                     :margin-left     (if @sidepanel? :330px 0)}
+                    (:style wrapper))}
           [ec/sidepanel local-state]
           [rlc/layout-comp {:layout layout :env env}]])
        :component-did-update
@@ -91,12 +95,17 @@
          (register-key-events local-state))})))
 
 (r/render [layout-editor
-           {:layout
+           {:wrapper
+            {:style {:height :500px}}
+            :layout
             (rlf/layout
-              {:responses [{:id :res2
+              {:style     {:width      "200px"
+                           :height     "200px"
+                           :align-self :center}
+               :responses [{:id          :res2
                             :constraints [[:min-width 800]]
-                            :layout (rlf/layout)}
-                           {:id :res1
+                            :layout      (rlf/layout)}
+                           {:id          :res1
                             :constraints [[:min-width 500]]
-                            :layout (rlf/layout)}]})}]
+                            :layout      (rlf/layout)}]})}]
           (eu/$1 "#app"))

@@ -6,7 +6,7 @@
 (defn kws->options [kws]
   (map #(hash-map :name (name (or % "")) :value %) kws))
 
-(defn labeled-dropdown [{:keys [cursor on-change options placeholder label]}]
+(defn labeled-dropdown []
   (let [uid (gensym)]
     (r/create-class
       {:reagent-render
@@ -20,16 +20,16 @@
             (doall
               (for [{:keys [value name] :as o} options]
                 [:div.item
-                 {:key [value name]
+                 {:key        [value name]
                   :data-value value}
                  name]))]]])
        :component-did-mount
        (fn [this]
          (let [on-change (:on-change (r/props this) reset!)]
            (.dropdown (js/$ (str "#" uid))
-                      (clj->js {:onChange #(on-change cursor %)}))))})))
+                      (clj->js {:onChange #(on-change (:cursor (r/props this)) %)}))))})))
 
-(defn dropdown [{:keys [cursor on-change options placeholder label]}]
+(defn dropdown []
   (let [uid (gensym)]
     (r/create-class
       {:reagent-render
@@ -48,9 +48,9 @@
        (fn [this]
          (let [on-change (:on-change (r/props this) reset!)]
            (.dropdown (js/$ (str "#" uid))
-                      (clj->js {:onChange #(on-change cursor %)}))))})))
+                      (clj->js {:onChange #(on-change (:cursor (r/props this)) %)}))))})))
 
-(defn accordion [{:keys [cursor xs]}]
+(defn accordion []
   (let [uid (gensym)]
     (r/create-class
       {:reagent-render
@@ -62,17 +62,16 @@
        (fn [this]
          (let [on-change (:on-change (r/props this) reset!)]
            (.accordion (js/$ (str "#" uid))
-                       (clj->js {:onChange #(on-change cursor %)}))))})))
+                       (clj->js {:onChange #(on-change (:cursor (r/props this)) %)}))))})))
 
 (defn select-coll [state k]
   (let [c (r/cursor state [:style k])]
-    (fn []
-      [labeled-dropdown
-       {:label (name k)
-        :cursor c
-        :props {:style {:width :120px}}
-        :options (kws->options (get cp/flex-opts k))
-        :placeholder (name (get cp/default-flex-props k))}])))
+    [labeled-dropdown
+     {:label       (name k)
+      :cursor      c
+      :props       {:style {:width :120px}}
+      :options     (kws->options (get cp/flex-opts k))
+      :placeholder (name (get cp/default-flex-props k))}]))
 
 (def input-button-styles
   {:width :120px
