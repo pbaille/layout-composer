@@ -1,5 +1,7 @@
 (ns editor.utils
-  (:require [reagent.core :as r]))
+  (:require [reagent.core :as r]
+            [cljs.tools.reader :refer [read-string]]
+            [cljs.js :refer [empty-state eval js-eval]]))
 
 (defn $ [s]
   (array-seq (js/document.querySelectorAll s)))
@@ -20,6 +22,28 @@
     (.appendChild js/document.body e)
     (.click e)
     (.removeChild js/document.body e)))
+
+(defn eval-str [s]
+  (eval (empty-state)
+        (read-string s)
+        {:eval       js-eval
+         :source-map true
+         :context    :expr}
+        (fn [result] result)))
+
+(comment ((:value (eval-str "(fn [a] a)")) 45))
+
+(defn file-input [{:keys [on-change id hidden?]}]
+  [:input
+   {:id id
+    :style     (when hidden? {:display :none})
+    :type      :file
+    :on-change (fn [e]
+                 (let [r (js/FileReader.)]
+                   (.readAsBinaryString r
+                                        (-> e .-target .-files (aget 0)))
+                   (set! (.-onloadend r)
+                         #(on-change (.-result r)))))}])
 
 (defn styles [el]
   (js/window.getComputedStyle (r/dom-node el)))

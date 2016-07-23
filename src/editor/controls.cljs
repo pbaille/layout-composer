@@ -280,20 +280,12 @@
 
 (defn io [layout-cursor]
   [:div
-   [:input#upload-layout
-    {:style     {:display :none}
-     :type      :file
-     :on-change (fn [e]
-                  (let [r (js/FileReader.)]
-                    (.readAsBinaryString
-                      r
-                      (-> e .-target .-files (aget 0)))
-                    (set! (.-onloadend r)
-                          (fn []
-                            (println (type (.-result r)))
-                            (println (.-result r))
-                            (reset! layout-cursor
-                                    (cljs.reader/read-string (.-result r)))))))}]
+   [eu/file-input
+    {:on-change
+         #(reset! layout-cursor
+                  (cljs.reader/read-string %))
+     :id "upload-layout"
+     :hidden? true}]
    [:div.ui.buttons.fluid
     [:div.ui.button
      {:on-click #(eu/download "layout.edn" @layout-cursor)}
