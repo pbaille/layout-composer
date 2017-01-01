@@ -1,18 +1,7 @@
-# rlayout
+# Layout composer
 
-Reagent Layout Composer
-
-## Dev
-
-lein run -m clojure.main script/fig.clj
-
-visit localhost:5000
-
-## Prod
-
-lein cljsbuild once min
-
-open resources/public/prod.html
+A responsive layout editor component written with reagent.
+Alpha, do not use
 
 ## License
 
