@@ -66,8 +66,8 @@
 (defn constraints-arg-map
   "build the argument passed to all constraints"
   [this]
-  {:node (r/dom-node this)
-   :props (r/props this)
+  {:node       (r/dom-node this)
+   :props      (r/props this)
    :dimensions (dimensions-map this)})
 
 (defn respond
@@ -82,7 +82,7 @@
           {:keys [id layout] :as fres}
           (u/first-where
             #((compile-constraints
-                {:response %
+                {:response        %
                  :constraints-map constraints-map})
               arg-map)
             rs)]
@@ -100,21 +100,21 @@
 ;; defaults -----------------------------
 
 (def default-layout-style
-  {:display :flex
-   :flex-direction "row"
-   :flex-wrap "nowrap"
+  {:display         :flex
+   :flex-direction  "row"
+   :flex-wrap       "nowrap"
    :justify-content "flex-start"
-   :align-items "stretch"
-   :align-content "stretch"
-   :order 1
-   :flex-grow 1
-   :flex-shrink 0
-   :flex-basis "auto"
-   :align-self "auto"})
+   :align-items     "stretch"
+   :align-content   "stretch"
+   :order           1
+   :flex-grow       1
+   :flex-shrink     0
+   :flex-basis      "auto"
+   :align-self      "auto"})
 
 (def default-placeholder-component
-  [:div {:style {:width :100%
-                 :height :100%
+  [:div {:style {:width            :100%
+                 :height           :100%
                  :background-color :lightgrey}}])
 
 ;; main ------------------------------------
@@ -130,22 +130,19 @@
             (resp this))]
     (r/create-class
       {:component-did-update upd
-       :component-did-mount upd
-       :reagent-render
-       (fn [{:keys [layout path env]
-             :or {path []}}]
-         (let [{:keys [style childs comp]} @layout]
-           ^{:key (str "container-" path)}
-           [:div.layout
-            {:data-path path
-             :style (merge default-layout-style style)}
-            (if-let [xs (seq childs)]
-              (for [[idx] (u/indexed xs)]
-                [layout-comp {:layout (r/cursor layout [:childs idx])
-                              :path (conj path idx)
-                              :env env}])
-              (if comp
-                (let [[comp-key & comp-args] comp]
-                  (into [(get-in env [:components-map comp-key]) (:state env)]
-                        comp-args))
-                (:placeholder-component env default-placeholder-component)))]))})))
+       :component-did-mount  upd
+       :reagent-render       (fn [{:keys [layout path env]
+                                   :or   {path []}}]
+                               (let [{:keys [style childs]} @layout]
+                                 [:div.layout
+                                  {:key       (str "container-" path)
+                                   :data-path path
+                                   :style     (merge default-layout-style style)}
+                                  (if-let [xs (seq childs)]
+                                    (for [[idx child] (u/indexed xs)]
+                                      (if (u/t= child :layout)
+                                        [layout-comp {:layout (r/cursor layout [:childs idx])
+                                                      :path   (conj path idx)
+                                                      :env    env}]
+                                        [(first child) (assoc (or (second child) {}) :env env)]))
+                                    (:placeholder-component env default-placeholder-component))]))})))

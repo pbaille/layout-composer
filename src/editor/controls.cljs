@@ -116,24 +116,25 @@
           :on-click #(swap! xs conj (rlf/response))}
          [:i.icon.plus]]]
        [:div.ui.divider]
-       (doall
-         (interpose
-           [:div.ui.divider]
-           (for [[idx r] (map vector (range) @xs)]
-             (if (= @edited idx)
-               ^{:key [idx r]}
-               [response-editor {:state           r
-                                 :edited          edited
-                                 :current         current
-                                 :idx             idx
-                                 :responses       xs
-                                 :constraints-map constraints-map}]
-               ^{:key [idx r]}
-               [response {:state     r
-                          :edited    edited
-                          :current   current
-                          :idx       idx
-                          :responses xs}]))))])))
+       (next
+         (apply concat
+                (for [[idx r] (map vector (range) @xs)]
+                  (list
+                    [:div.ui.divider {:key (str "divider_" idx)}]
+                    (if (= @edited idx)
+                      ^{:key [idx r]}
+                      [response-editor {:state           r
+                                        :edited          edited
+                                        :current         current
+                                        :idx             idx
+                                        :responses       xs
+                                        :constraints-map constraints-map}]
+                      ^{:key [idx r]}
+                      [response {:state     r
+                                 :edited    edited
+                                 :current   current
+                                 :idx       idx
+                                 :responses xs}])))))])))
 
 ;; css props ---------------------------------------------------------------
 
@@ -281,11 +282,10 @@
 (defn io [layout-cursor]
   [:div
    [eu/file-input
-    {:on-change
-         #(reset! layout-cursor
-                  (cljs.reader/read-string %))
-     :id "upload-layout"
-     :hidden? true}]
+    {:on-change #(reset! layout-cursor
+                         (cljs.reader/read-string %))
+     :id        "upload-layout"
+     :hidden?   true}]
    [:div.ui.buttons.fluid
     [:div.ui.button
      {:on-click #(eu/download "layout.edn" @layout-cursor)}

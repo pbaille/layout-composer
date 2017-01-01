@@ -81,8 +81,8 @@
                      :align-content   :center
                      :align-items     :center
                      :flex-flow       "column nowrap"
-                     :max-height      :100vh
-                     :max-width       (if @sidepanel? "calc(100vw - 330px)" :100vw)
+                     :height          :100vh
+                     :width           (if @sidepanel? "calc(100vw - 330px)" :100vw)
                      :margin-left     (if @sidepanel? :330px 0)}
                     (:style wrapper))}
           [ec/sidepanel local-state]
@@ -94,13 +94,21 @@
          (render-focused @focus-path)
          (register-key-events local-state))})))
 
+(def cmap
+  {:hello []
+   :goodbye })
+
 (r/render [layout-editor
            {:wrapper
-            {:style {:height :500px}}
+            {:style {}}
+            :env
+            {:components-map {:hello   [:div "Hello"]
+                              :goodbye [:div "Goodbye"]}}
             :layout
             (rlf/layout
-              {:style     {:width      "200px"
-                           :height     "200px"
+              {:style     {:min-width  "400px"
+                           :max-height "400px"
+                           :flex-grow  1
                            :align-self :center}
                :responses [{:id          :res2
                             :constraints [[:min-width 800]]
