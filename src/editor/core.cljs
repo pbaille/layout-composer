@@ -56,17 +56,23 @@
           "#db2828")))
 
 (def default-env
-  {:components-map  {}
+  {:components-map {:hello
+                    (fn [] [:div
+                            {:style {:width :100%
+                                     :height :100%
+                                     :background :pink
+                                     :font-size :26px}}
+                            "Hello"])}
    :constraints-map rlc/default-constraints-map
-   :state           (r/atom {})
-   :placeholder     rlc/default-placeholder-component})
+   :state (r/atom {})
+   :placeholder rlc/default-placeholder-component})
 
 (defn layout-editor [{:keys [layout env wrapper]}]
   (let [env (merge default-env env)
-        local-state (r/atom {:layout       (or layout (rlf/layout))
-                             :focus-path   []
+        local-state (r/atom {:layout (or layout (rlf/layout))
+                             :focus-path []
                              :props-panel? true
-                             :env          env})
+                             :env env})
         sidepanel? (reaction (:props-panel? @local-state))
         layout (r/cursor local-state [:layout])
         focus-path (reaction (:focus-path @local-state))]
@@ -76,14 +82,14 @@
          (:focus-path @local-state)
          [:div
           {:style (merge
-                    {:display         :flex
+                    {:display :flex
                      :justify-content :center
-                     :align-content   :center
-                     :align-items     :center
-                     :flex-flow       "column nowrap"
-                     :height          :100vh
-                     :width           (if @sidepanel? "calc(100vw - 330px)" :100vw)
-                     :margin-left     (if @sidepanel? :330px 0)}
+                     :align-content :center
+                     :align-items :center
+                     :flex-flow "column nowrap"
+                     :max-height :100vh
+                     :max-width (if @sidepanel? "calc(100vw - 330px)" :100vw)
+                     :margin-left (if @sidepanel? :330px 0)}
                     (:style wrapper))}
           [ec/sidepanel local-state]
           [rlc/layout-comp {:layout layout :env env}]])
@@ -94,26 +100,19 @@
          (render-focused @focus-path)
          (register-key-events local-state))})))
 
-(def cmap
-  {:hello []
-   :goodbye })
-
 (r/render [layout-editor
            {:wrapper
-            {:style {}}
-            :env
-            {:components-map {:hello   [:div "Hello"]
-                              :goodbye [:div "Goodbye"]}}
+            {:style {:height :500px}}
             :layout
             (rlf/layout
-              {:style     {:min-width  "400px"
-                           :max-height "400px"
-                           :flex-grow  1
-                           :align-self :center}
-               :responses [{:id          :res2
+              {:style {:width "200px"
+                       :height "200px"
+                       :align-self :center}
+               :comp [:hello]
+               :responses [{:id :res2
                             :constraints [[:min-width 800]]
-                            :layout      (rlf/layout)}
-                           {:id          :res1
+                            :layout (rlf/layout)}
+                           {:id :res1
                             :constraints [[:min-width 500]]
-                            :layout      (rlf/layout)}]})}]
+                            :layout (rlf/layout)}]})}]
           (eu/$1 "#app"))
